@@ -24,10 +24,13 @@ LaGuardiaTemp <- read_csv(here::here("data", "CentralParkTemp_2007to2018.csv")) 
 Preterm_by_Month <- read_tsv(here::here("data", "Births_YrMnth_GestationalAge_NYS.txt"))
 Preterm_by_Day <- read_tsv(here::here("data", "PretermBirths_NY_byDay_2018.txt"))
 Fullterm_by_Day <- read_tsv(here::here("data", "FullTermBirths_NY_byDay_2018.txt"))
+Births_GestWeek_notInduced <- read_tsv(here::here("data", "NotInduced2018NYSBirths_singleton.txt"))
+NYBirths_by_Month_single_notInduced <- read_tsv(here::here("data", "NotInduced2018NYSBirths_bymonth_singleton.txt"))
 
-###################
-#### Functions ####
-###################
+
+
+#### Functions used throughout ####
+
 
 coalesce_join <- function(x, y, 
                           by = NULL, suffix = c(".x", ".y"), 
@@ -143,9 +146,7 @@ getSeason <- function(input.date){
   return(cuts)
 }
 
-##############################
-#### Simulate Temperature ####
-##############################
+#### Cleaning Temperature Data ####
 
 #Visualize min and max temp at LaGuardia Airport
 LaGuardiaTemp1 <- LaGuardiaTemp %>%
@@ -158,10 +159,10 @@ ggplot(LaGuardiaTemp1, aes(x = date, y = x)) + geom_point() + geom_smooth(method
   ylab("Max temperature (F)") + 
   theme(text = element_text(size = 15))
 
-##############################################
-###   Simulating all births per day NYS   ####
-##############################################
 
+### Cleaning CDC Wonder and estimating all preterm births per day NYS   ####
+
+Clean_and_smooth_data <- function(NYBirths_by_Month_plural, NYBirths_by_Weekday, NYBirths_by_Month_single){
 #pulling out annual pattern of proportion births per month
 NYBirths_by_Month1 <- NYBirths_by_Month_plural %>% 
   filter(!is.na(Month),
@@ -197,64 +198,6 @@ NYBirths_by_Month2 <- NYBirths_by_Month1 %>%
          Week_Births_Pct = Week_Births1/Births_Year) %>%
   dplyr::select(date, Year, Wk_of_Year, Month_number, Week_Births1, Week_Births_Pct)
 
-#now look at singletons by gestational age to get proportion of births 
-Annual_Singleton_Births1 <- Annual_Singleton_Births %>%
-  filter(is.na(Notes)) %>%
-  rename(Total_Singleton_Births_Year = "Births") %>%
-  select(Year, Total_Singleton_Births_Year)
-
-Births_WklyGestAge_07to18_a <- Births_WklyGestAge_07to18 %>%
-  filter(is.na(Notes) & "LMP Gestational Age Weekly Code" != 99) %>%
-  rename(Gest_Age = "LMP Gestational Age Weekly Code",
-         Year_Births_perAge = "Births") %>%
-  select(Year, Gest_Age, Year_Births_perAge) %>%
-  left_join(., Annual_Singleton_Births1, by = "Year") %>%
-  mutate(Year_Births_perAge = as.numeric(na_if(Year_Births_perAge, "Suppressed")))
-
-Births_WklyGestAge_07to18_b <- Births_WklyGestAge_07to18_a %>% 
-  group_by(Year) %>% 
-  summarise(Births_with_GestAge = sum(Year_Births_perAge, na.rm = T))
-
-#making estimates for all gestational ages
-Births_WklyGestAge_07to18_c <- Births_WklyGestAge_07to18_a %>%
-  left_join(., Births_WklyGestAge_07to18_b, by = "Year") %>%
-  mutate(Year_Births_perAge = if_else(is.na(Year_Births_perAge), 
-                                      Total_Singleton_Births_Year - Births_with_GestAge, 
-                                      Year_Births_perAge)) %>%
-  select(-Births_with_GestAge)
-
-MonthBirths_total <- NYBirths_by_Month_single %>% 
-  filter(Notes == "Total" & !is.na(`Month Code`)) %>%
-  rename("Month_number" = `Month Code`) %>%
-  mutate(Births_month = as.numeric(Births)) %>%
-  select(Year, Month_number, Births_month) 
-
-NYBirths_by_Month_single1 <- NYBirths_by_Month_single %>%
-  rename("Month_number" = `Month Code`,
-         Gest_Age = `LMP Gestational Age Weekly Code`) %>%
-  filter(!is.na(Gest_Age)) %>%
-  select(Year, Month, Month_number, Gest_Age, Births) %>%
-  mutate(Month = factor(Month, levels = month.name)) %>%
-  left_join(., MonthBirths_total, by = c("Year", "Month_number")) %>%
-  left_join(., Births_WklyGestAge_07to18_c, by = c("Year", "Gest_Age"))
-
-Lowest_Preterm_Prop_notSuppressed <- NYBirths_by_Month_single1 %>%
-  filter(Births != "Suppressed") %>% 
-  group_by(Year, Month_number) %>%
-  slice_min(order_by = Gest_Age) %>%
-  ungroup() %>%
-  mutate(Prop_of_LowestPreterm = as.numeric(Births)/Year_Births_perAge) %>%
-  select(Year, Month_number, Prop_of_LowestPreterm)
-  
-NYBirths_by_Month_preterm_single2 <- NYBirths_by_Month_single1 %>%
-  left_join(., Lowest_Preterm_Prop_notSuppressed, by = c("Year", "Month_number")) %>%
-  mutate(Births = as.numeric(na_if(Births, "Suppressed")),
-         Births = if_else(is.na(Births), floor(Year_Births_perAge*Prop_of_LowestPreterm), Births),
-         Prop_Births = Births/Births_month) %>% 
-  filter(Gest_Age < 37) %>%
-  dplyr::select(Year, Month_number, Gest_Age, Prop_Births) 
-  
-
 #1) Births by day of week
 
 NYBirths_by_Weekday1 <- NYBirths_by_Weekday %>%
@@ -272,7 +215,7 @@ All_Dates_inTimePeriod <- tibble(date = seq.Date(as.Date("2007-01-01"), as.Date(
          Year = year(date))
 
 NYBirths_by_Day <- All_Dates_inTimePeriod %>% 
-  coalesce_join(., NYBirths_by_Month2, by = c("Year", "Wk_of_Year")) %>% #NYBirths_by_Month2
+  coalesce_join(., NYBirths_by_Month2, by = c("Year", "Wk_of_Year")) %>% 
   mutate(Weekday = as.character(wday(date, label = TRUE, abbr = FALSE))) %>%
   left_join(., NYBirths_by_Weekday1, by = c("Year","Month_number","Weekday")) %>%
   mutate(Births_date = floor(Week_Births1 * Prop_Births_Wkday),
@@ -280,23 +223,141 @@ NYBirths_by_Day <- All_Dates_inTimePeriod %>%
   fill(., Month_number:Week_Births_Pct,Month, Births_Month, .direction = "down") %>%
   mutate(Births_date = na.approx(Births_date, rule = 2))
 
+return(NYBirths_by_Day)
+}
 
-########################
-#### Preterm births ####
-########################
+Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single, Births_WklyGestAge_07to18, Annual_Singleton_Births){
+  
+  #now look at singletons by gestational age to get proportion of births 
+  Annual_Singleton_Births1 <- Annual_Singleton_Births %>%
+    filter(is.na(Notes)) %>%
+    rename(Total_Singleton_Births_Year = "Births") %>%
+    select(Year, Total_Singleton_Births_Year)
+  
+  MonthBirths_total <- NYBirths_by_Month_single %>% 
+    filter(Notes == "Total" & !is.na(`Month Code`)) %>%
+    rename("Month_number" = `Month Code`) %>%
+    mutate(Births_month = as.numeric(Births)) %>%
+    select(Year, Month_number, Births_month) 
+  
+  ## All births by gestational age
+  Births_WklyGestAge_07to18_a <- Births_WklyGestAge_07to18 %>%
+    filter(is.na(Notes) & "LMP Gestational Age Weekly Code" != 99) %>%
+    rename(Gest_Age = "LMP Gestational Age Weekly Code",
+           Year_Births_perAge = "Births") %>%
+    select(Year, Gest_Age, Year_Births_perAge) %>%
+    left_join(., Annual_Singleton_Births1, by = "Year") %>%
+    mutate(Year_Births_perAge = as.numeric(na_if(Year_Births_perAge, "Suppressed")))
+  
+  Births_WklyGestAge_07to18_b <- Births_WklyGestAge_07to18_a %>% 
+    group_by(Year) %>% 
+    summarise(Births_with_GestAge = sum(Year_Births_perAge, na.rm = T))
+  
+  #making estimates for all gestational ages
+  Births_WklyGestAge_07to18_c <- Births_WklyGestAge_07to18_a %>%
+    left_join(., Births_WklyGestAge_07to18_b, by = "Year") %>%
+    mutate(Year_Births_perAge = if_else(is.na(Year_Births_perAge), 
+                                        Total_Singleton_Births_Year - Births_with_GestAge, 
+                                        Year_Births_perAge)) %>%
+    select(-Births_with_GestAge)
+  
+  NYBirths_by_Month_single1 <- NYBirths_by_Month_single %>%
+    rename("Month_number" = `Month Code`,
+           Gest_Age = `LMP Gestational Age Weekly Code`) %>%
+    filter(!is.na(Gest_Age)) %>%
+    select(Year, Month, Month_number, Gest_Age, Births) %>%
+    mutate(Month = factor(Month, levels = month.name)) %>%
+    left_join(., MonthBirths_total, by = c("Year", "Month_number")) %>%
+    left_join(., Births_WklyGestAge_07to18_c, by = c("Year", "Gest_Age"))
+  
+  Lowest_Preterm_Prop_notSuppressed <- NYBirths_by_Month_single1 %>%
+    filter(Births != "Suppressed") %>% 
+    group_by(Year, Month_number) %>%
+    slice_min(order_by = Gest_Age) %>%
+    ungroup() %>%
+    mutate(Prop_of_LowestPreterm = as.numeric(Births)/Year_Births_perAge) %>%
+    select(Year, Month_number, Prop_of_LowestPreterm)
+  
+  NYBirths_by_Month_preterm_single2 <- NYBirths_by_Month_single1 %>%
+    left_join(., Lowest_Preterm_Prop_notSuppressed, by = c("Year", "Month_number")) %>%
+    mutate(Births = as.numeric(na_if(Births, "Suppressed")),
+           Births = if_else(is.na(Births), floor(Year_Births_perAge*Prop_of_LowestPreterm), Births),
+           Prop_Births = Births/Births_month) %>% 
+    filter(Gest_Age < 37) %>%
+    dplyr::select(Year, Month_number, Gest_Age, Prop_Births) 
+  
+  Preterms_per_day_all <- NYBirths_by_Day %>% #required input for everything below
+    dplyr::select(date, Year, Wk_of_Year, Month_number, Births_date) %>%
+    full_join(., NYBirths_by_Month_preterm_single2, by = c("Year", "Month_number")) %>%
+    mutate(Preterms = floor(Births_date*Prop_Births)) #round(Births_date*Prop_Births, 0)  
+ 
+  return(Preterms_per_day_all) 
+}
 
-#Pull preterms out of overall estimated births
+Estimate_nonInduced_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single, Births_GestWeek_notInduced, Annual_Singleton_Births){
+  
+  Annual_Singleton_Births1 <- Annual_Singleton_Births %>%
+    filter(is.na(Notes)) %>%
+    rename(Total_Singleton_Births_Year = "Births") %>%
+    select(Year, Total_Singleton_Births_Year)
+  
+  MonthBirths_total <- NYBirths_by_Month_single %>% 
+    filter(Notes == "Total" & !is.na(`Month Code`)) %>%
+    rename("Month_number" = `Month Code`) %>%
+    mutate(Births_month = as.numeric(Births)) %>%
+    select(Year, Month_number, Births_month) 
+  
+  ## Just those singleton births that arent induced with gestational age 
+  Births_GestWeek_notInduced_a <- Births_GestWeek_notInduced %>%
+    filter(is.na(Notes) & "LMP Gestational Age Weekly Code" != 99) %>%
+    rename(Gest_Age = "LMP Gestational Age Weekly Code",
+           Year_Births_perAge = "Births") %>%
+    select(Gest_Age, Year_Births_perAge) %>%
+    mutate(Year = 2018) %>%
+    left_join(., Annual_Singleton_Births1, by = "Year") %>%
+    mutate(Year_Births_perAge = as.numeric(na_if(Year_Births_perAge, "Suppressed")),
+           Year_Births_perAge = ifelse(is.na(Year_Births_perAge), sample(5:9, 1), Year_Births_perAge))
+  
+  NYBirths_by_Month_single_notInduced1 <- NYBirths_by_Month_single_notInduced %>%
+    rename("Month_number" = `Month Code`,
+           Gest_Age = `LMP Gestational Age Weekly Code`) %>%
+    filter(!is.na(Gest_Age)) %>%
+    select(Month, Month_number, Gest_Age, Births) %>%
+    mutate(Month = factor(Month, levels = month.name),
+           Year = 2018) %>%
+    left_join(., MonthBirths_total, by = c("Year", "Month_number")) %>%
+    left_join(., Births_GestWeek_notInduced_a, by = c("Year", "Gest_Age"))
+  
+  Lowest_Preterm_Prop_notSuppressed1 <- NYBirths_by_Month_single_notInduced1 %>%
+    filter(Births != "Suppressed") %>% 
+    group_by(Year, Month_number) %>%
+    slice_min(order_by = Gest_Age) %>%
+    ungroup() %>%
+    mutate(Prop_of_LowestPreterm = as.numeric(Births)/Year_Births_perAge) %>%
+    select(Year, Month_number, Prop_of_LowestPreterm)
+  
+  NYBirths_by_Month_single_notInduced2 <- NYBirths_by_Month_single_notInduced1 %>%
+    left_join(., Lowest_Preterm_Prop_notSuppressed1, by = c("Year", "Month_number")) %>%
+    mutate(Births = as.numeric(na_if(Births, "Suppressed")),
+           Births = if_else(is.na(Births), floor(Year_Births_perAge*Prop_of_LowestPreterm), Births),
+           Prop_Births = Births/Births_month) %>% 
+    filter(Gest_Age < 37) %>%
+    dplyr::select(Year, Month_number, Gest_Age, Prop_Births) 
+  
+  Preterms_per_day_notInduced <- NYBirths_by_Day %>% 
+    filter(year(date) == 2018) %>%
+    dplyr::select(date, Year, Wk_of_Year, Month_number, Births_date) %>%
+    full_join(., NYBirths_by_Month_single_notInduced2, by = c("Year", "Month_number")) %>%
+    mutate(Preterms = floor(Births_date*Prop_Births)) #round(Births_date*Prop_Births, 0)
+  
+  return(Preterms_per_day_notInduced)
+}
 
-Preterms_per_day <- NYBirths_by_Day %>% #required input for everything below
-  dplyr::select(date, Year, Wk_of_Year, Month_number, Births_date) %>%
-  full_join(., NYBirths_by_Month_preterm_single2, by = c("Year", "Month_number")) %>%
-  mutate(Preterms = floor(Births_date*Prop_Births)) #round(Births_date*Prop_Births, 0)
+NYBirths_by_Day <- Clean_and_smooth_data(NYBirths_by_Month_plural, NYBirths_by_Weekday, NYBirths_by_Month_single)
+Preterms_per_day_all <- Estimate_all_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single, Births_WklyGestAge_07to18, Annual_Singleton_Births)
+Preterms_per_day_notInduced <- Estimate_nonInduced_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single, Births_GestWeek_notInduced, Annual_Singleton_Births)
 
-Preterms_per_day %>%
-  ggplot(aes(date, Preterms)) +
-  geom_point()+
-  geom_smooth(method = "loess")+
-  facet_wrap(~Gest_Age, scales = "free") 
+#### Creating Simulations and conducting case crossovers ####
 
 ##need to create lambdas ###
 Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df){ ##RR per 10F
@@ -401,7 +462,6 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
   
 }
 
-
 #create parameters for 2007 and 2018
 plan(multisession(workers = 14)) #for parallelization
 
@@ -427,11 +487,12 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
   
 }
 
-CCO_simulation_2007 <- Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day, 1000)
-CCO_simulation_2018 <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day, 1000)
+CCO_simulation_2007 <- Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all, 1000)
+CCO_simulation_2018 <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all, 1000)
+CCO_simulation_2018_notInduced <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_notInduced, 1000)
 
 
-# saveRDS(Results_CaseCrossovers, here::here("data", "Bootstrapped_CCO_results_23July2020.RDS"))
+#### Analyze Results ####
 
 Visualize_Results <- function(results_df){
   
@@ -505,6 +566,7 @@ Visualize_Results <- function(results_df){
 
 Visualize_Results(CCO_simulation_2007)
 Visualize_Results(CCO_simulation_2018)
+Visualize_Results(CCO_simulation_2018_notInduced)
 
 # Bias_Estimates <- Results_CaseCrossovers1 %>%
 #   group_by(Analysis, Simulated_RR) %>%
@@ -529,7 +591,7 @@ Visualize_Results(CCO_simulation_2018)
 
 
 
-print(Bias_Estimates)
+# print(Bias_Estimates)
 
 # View(Results_CaseCrossovers1 %>% 
 #        group_by(Analysis, Simulated_RR) %>%
@@ -540,47 +602,47 @@ print(Bias_Estimates)
 #               expBias = exp(lnBias*10),
 #               Percent_Difference = round((((Mean_Estimate/Sim_RR_logperunit)-1)*100),2)))
 
-View(Results_CaseCrossovers1 %>% 
-       group_by(Analysis, Simulated_RR) %>%
-       summarise(Mean_Estimate = mean(estimate),
-                 StdErr_Estimate = sd(estimate),
-                 Mean_Estimate_exp = mean(exp(estimate*10))) %>%
-       mutate(Percent_Difference = round((((Mean_Estimate_exp-Simulated_RR)/Simulated_RR)*100),2)))
+# View(Results_CaseCrossovers1 %>% 
+#        group_by(Analysis, Simulated_RR) %>%
+#        summarise(Mean_Estimate = mean(estimate),
+#                  StdErr_Estimate = sd(estimate),
+#                  Mean_Estimate_exp = mean(exp(estimate*10))) %>%
+#        mutate(Percent_Difference = round((((Mean_Estimate_exp-Simulated_RR)/Simulated_RR)*100),2)))
 
 
 
-#### Visualizations ####
-Parameters_for_visualization <- Parameters_2018 %>%
-  filter(Simulated_RR==1)%>%
-  group_by(date, x) %>%
-  summarise(Preterms_per_day = sum(Preterms)) %>%
-  ungroup() %>%
-  # group_by(date) %>%
-  gather(key = "variable", value = "value", -date) %>% 
-  mutate(variable = factor(variable, 
-                           levels = c("Preterms_per_day", "x"),
-                           labels = c(expression("Baseline Preterm Births ("*beta[0]*")"), expression("Temperature ("*degree*F*")"))))
 
-ggplot(Parameters_for_visualization, aes(x = date, y = value)) + 
-  geom_line(aes(color = variable)) +
-  facet_grid(variable~., scales = "free", labeller = label_parsed, switch = "y")+ 
-  scale_x_date(date_breaks = "month", date_labels = "%b") +
-  scale_y_continuous(position = "right") +
-  scale_color_manual(breaks = c(expression("Baseline Preterm Births ("*beta[0]*")"), expression("Temperature ("*degree*F*")")), 
-                     values = c("black", "blue"))+
-  theme_minimal(base_size = 30) +
-  theme(legend.position = "none", 
-        axis.title.x = element_blank(), 
-        axis.title.y = element_blank())
-  
-    theme_minimal(base_size = 35) + 
-    scale_y_continuous(
-      # Features of the first axis
-      name = expression("Baseline Preterm Births ("*beta[0]*")"),
-      # Add a second axis and specify its features
-      sec.axis = sec_axis(~., name="Temperature (°F)")) +
-  theme(axis.title.y.right = element_text(color = temperatureColor)) 
-
+# Parameters_for_visualization <- Parameters_2018 %>%
+#   filter(Simulated_RR==1)%>%
+#   group_by(date, x) %>%
+#   summarise(Preterms_per_day = sum(Preterms)) %>%
+#   ungroup() %>%
+#   # group_by(date) %>%
+#   gather(key = "variable", value = "value", -date) %>% 
+#   mutate(variable = factor(variable, 
+#                            levels = c("Preterms_per_day", "x"),
+#                            labels = c(expression("Baseline Preterm Births ("*beta[0]*")"), expression("Temperature ("*degree*F*")"))))
+# 
+# ggplot(Parameters_for_visualization, aes(x = date, y = value)) + 
+#   geom_line(aes(color = variable)) +
+#   facet_grid(variable~., scales = "free", labeller = label_parsed, switch = "y")+ 
+#   scale_x_date(date_breaks = "month", date_labels = "%b") +
+#   scale_y_continuous(position = "right") +
+#   scale_color_manual(breaks = c(expression("Baseline Preterm Births ("*beta[0]*")"), expression("Temperature ("*degree*F*")")), 
+#                      values = c("black", "blue"))+
+#   theme_minimal(base_size = 30) +
+#   theme(legend.position = "none", 
+#         axis.title.x = element_blank(), 
+#         axis.title.y = element_blank())
+#   
+#     theme_minimal(base_size = 35) + 
+#     scale_y_continuous(
+#       # Features of the first axis
+#       name = expression("Baseline Preterm Births ("*beta[0]*")"),
+#       # Add a second axis and specify its features
+#       sec.axis = sec_axis(~., name="Temperature (°F)")) +
+#   theme(axis.title.y.right = element_text(color = temperatureColor)) 
+# 
   #x = "Temperature (°F)", Preterms_per_day = expression("Baseline Preterm Births ("*beta[0]*")"))
 # Parameters_2018 %>%
 #   filter(Simulated_RR==1)%>%
@@ -638,42 +700,42 @@ ggplot(Parameters_for_visualization, aes(x = date, y = value)) +
 #   xlab("Round of Simulation (Month w/ adjustment for gestational age)") +
 #   ylab("Simulated Effect (RR per 10F)")
 
-#calculating percent coverage 
-
-
-  ggplot() + 
-  geom_point(data = Coverage1 %>% filter(Analysis == "Time stratified: 2 weeks"), aes(x = Simulated_RR, y = Coverage, shape = Analysis, fill = Analysis), size = 10) +
-  geom_point(data = Coverage1 %>% filter(Analysis != "Time stratified: 2 weeks"), 
-             aes(x = Simulated_RR, y = Coverage, shape = Analysis, fill = Analysis), size = 10, position=position_dodge(0.05)) +
-  scale_shape_manual(values=c(23, 21, 8, 24)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), minor_breaks = seq(0 , 1, .05), breaks = seq(0, 1, .10)) +
-  scale_x_continuous(minor_breaks = 0, breaks = seq(.9, 1.25, .05)) +
-  theme_minimal(base_size = 35) +
-  theme(legend.key.size = unit(2, "lines"), legend.position = c(.3,.25)) +
-  xlab("Simulated Odds Ratio") +
-  ylab("Coverage")
-
-  
-  ggplot() + #1450x1000
-    geom_point(data = Coverage1 %>% filter(Analysis == "Time stratified: 2 weeks"), aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 9) +
-    geom_point(data = Coverage1 %>% filter(Analysis != "Time stratified: 2 weeks"), 
-               aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 9, position=position_dodge(0.05)) +
-    facet_grid(~Simulated_RR, switch = "x") + 
-    scale_shape_manual(values=c(23, 21, 8, 24)) +
-    geom_hline(yintercept = .95, linetype = 2) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1), minor_breaks = seq(0 , 1, .05), breaks = seq(0, 1, .10)) +
-    scale_x_continuous(breaks = NULL, limits = c(.5,4.5)) +
-    theme_minimal(base_size = 35) +
-    theme(legend.key.size = unit(2, "lines"), 
-          legend.position = c(.25,.24), 
-          legend.text = element_text(size = 25),
-          legend.background = element_rect(fill = alpha("white", .75), linetype=0),
-          legend.key = element_rect(linetype = 0, fill = alpha("white", .5)),
-          axis.text.x=element_blank(), 
-          axis.ticks.x = element_blank(),
-          panel.spacing.x = unit(.5, "lines")) +
-    xlab("Simulated Odds Ratio") +
-    ylab("Coverage of 95% CI")
+# #calculating percent coverage 
+# 
+# 
+#   ggplot() + 
+#   geom_point(data = Coverage1 %>% filter(Analysis == "Time stratified: 2 weeks"), aes(x = Simulated_RR, y = Coverage, shape = Analysis, fill = Analysis), size = 10) +
+#   geom_point(data = Coverage1 %>% filter(Analysis != "Time stratified: 2 weeks"), 
+#              aes(x = Simulated_RR, y = Coverage, shape = Analysis, fill = Analysis), size = 10, position=position_dodge(0.05)) +
+#   scale_shape_manual(values=c(23, 21, 8, 24)) +
+#   scale_y_continuous(labels = scales::percent_format(accuracy = 1), minor_breaks = seq(0 , 1, .05), breaks = seq(0, 1, .10)) +
+#   scale_x_continuous(minor_breaks = 0, breaks = seq(.9, 1.25, .05)) +
+#   theme_minimal(base_size = 35) +
+#   theme(legend.key.size = unit(2, "lines"), legend.position = c(.3,.25)) +
+#   xlab("Simulated Odds Ratio") +
+#   ylab("Coverage")
+# 
+#   
+#   ggplot() + #1450x1000
+#     geom_point(data = Coverage1 %>% filter(Analysis == "Time stratified: 2 weeks"), aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 9) +
+#     geom_point(data = Coverage1 %>% filter(Analysis != "Time stratified: 2 weeks"), 
+#                aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 9, position=position_dodge(0.05)) +
+#     facet_grid(~Simulated_RR, switch = "x") + 
+#     scale_shape_manual(values=c(23, 21, 8, 24)) +
+#     geom_hline(yintercept = .95, linetype = 2) +
+#     scale_y_continuous(labels = scales::percent_format(accuracy = 1), minor_breaks = seq(0 , 1, .05), breaks = seq(0, 1, .10)) +
+#     scale_x_continuous(breaks = NULL, limits = c(.5,4.5)) +
+#     theme_minimal(base_size = 35) +
+#     theme(legend.key.size = unit(2, "lines"), 
+#           legend.position = c(.25,.24), 
+#           legend.text = element_text(size = 25),
+#           legend.background = element_rect(fill = alpha("white", .75), linetype=0),
+#           legend.key = element_rect(linetype = 0, fill = alpha("white", .5)),
+#           axis.text.x=element_blank(), 
+#           axis.ticks.x = element_blank(),
+#           panel.spacing.x = unit(.5, "lines")) +
+#     xlab("Simulated Odds Ratio") +
+#     ylab("Coverage of 95% CI")
   
 
 
