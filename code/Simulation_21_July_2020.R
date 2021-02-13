@@ -368,7 +368,7 @@ Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df){ ##
     mutate(lnRR_per_degreeF = log(RR_per_10F)/10)
   
   Preterms_per_day_indexYear <- Preterms_per_day_df %>%
-    filter(date >= start_date & date < end_date) #change to year
+    filter(date >= start_date & date < end_date) 
   
   Beta_naughts <- Preterms_per_day_indexYear %>%
     group_by(Gest_Age, Month_number) %>%
@@ -516,7 +516,12 @@ Create_table_of_bias_results <- function(Simulation_results){
 
 Create_table_of_coverage_results <- function(Simulation_results){
   
-  Coverage <- Simulation_results %>%
+  Results_CaseCrossovers <- Simulation_results %>% 
+    group_by(Analysis, Simulated_RR) %>%
+    mutate(Round_of_Sim = row_number()) %>%
+    ungroup()
+  
+  Coverage <- Results_CaseCrossovers %>%
     mutate(Exp_ConfLow = exp(conf.low*10),
            Exp_ConfHigh = exp(conf.high*10),
            Exp_Estimate = exp(estimate*10)) %>%
@@ -608,6 +613,42 @@ Create_table_of_coverage_results(CCO_simulation_2018)
 Create_table_of_coverage_results(CCO_simulation_2018_notInduced)
 
 Visualize_Results(CCO_simulation_2007)
-Visualize_Results(CCO_simulation_2018)
+Visualize_Results(CCO_simulation_2018) #1450 x 750
 Visualize_Results(CCO_simulation_2018_notInduced)
 
+##
+Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
+
+year_of_analysis <- year(start_date)
+
+Temp_plot <- Temp_df %>%
+  filter(year(date)==year_of_analysis) %>%
+  ggplot() + 
+  geom_line(aes(x = date, y = x), color = "blue") + 
+  annotate("rect", fill = "orange", alpha = 0.25, 
+           xmin = as.Date(start_date), xmax = as.Date(end_date),
+           ymin = -Inf, ymax = Inf)+
+  theme_minimal() +
+  theme(axis.title.x = element_blank()) + 
+  ylab("Maximum Temperature (F)")
+
+Preterms_2018_plot <- Births_df %>%
+  group_by(date) %>%
+  summarise(`Preterm Births` = sum(Preterms)) %>%
+  filter(year(date)==year_of_analysis) %>%
+  ggplot() + 
+  geom_line(aes(x = date, y = `Preterm Births`)) + 
+  annotate("rect", fill = "orange", alpha = 0.25, 
+           xmin = as.Date(start_date), xmax = as.Date(end_date),
+           ymin = -Inf, ymax = Inf) + 
+  theme_minimal() + 
+  xlab("Date")
+
+combined_plot <- ggarrange(Temp_plot, Preterms_2018_plot, ncol = 1, nrow = 2, labels = "AUTO")
+
+return(combined_plot)
+}
+
+
+Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2007-05-01", "2007-10-01") #700*550
+Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2018-05-01", "2018-10-01")
