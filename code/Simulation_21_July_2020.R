@@ -545,18 +545,19 @@ Create_table_of_coverage_results <- function(Simulation_results){
   return(Coverage2) 
 }
 
+
 Visualize_Results <- function(results_df){
   
-  Results_CaseCrossovers1 <- results_df %>%  
+  Results_CaseCrossovers1 <- results_df %>%
+    filter(Analysis=="CCO_2week" | Analysis=="CCO_Month") %>%
     group_by(Analysis, Simulated_RR) %>%
-    mutate(Round_of_Sim = row_number()) %>%
+    mutate(Round_of_Sim = row_number(),
+           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month"), 
+                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month"))) %>%
     ungroup()
   
   Bias_Estimates <- Results_CaseCrossovers1 %>%
-    mutate(Bias_OR = exp((estimate*10)-log(Simulated_RR)),
-           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_Month_GestAge", "CCO_Month_PropMth"), 
-                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: Month,\nAdjustment: Gestational Age", 
-                                        "Time Stratified: Month,\nAdjustment: Proportion of Month"))) 
+    mutate(Bias_OR = exp((estimate*10)-log(Simulated_RR))) 
   
   Bias_plot <- ggplot(Bias_Estimates) + 
     geom_boxplot(aes(Simulated_RR, Bias_OR, fill = Analysis)) + 
@@ -580,20 +581,16 @@ Visualize_Results <- function(results_df){
     mutate(Covered = if_else(Simulated_RR>=Exp_ConfLow & Simulated_RR<=Exp_ConfHigh, 1, 0)) %>%
     group_by(Simulated_RR, Analysis) %>%
     summarise(Coverage = (sum(Covered)/1000)) %>%
-    ungroup() %>%
-    mutate(Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_Month_GestAge", "CCO_Month_PropMth"), 
-                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: Month,\nAdjustment: Gestational Age", 
-                                        "Time Stratified: Month,\nAdjustment: Proportion of Month")))
+    ungroup()
   
   Coverage_plot <- ggplot() + 
-    geom_point(data = Coverage1 %>% filter(Analysis == "Time stratified: 2 weeks"), aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 9) +
-    geom_point(data = Coverage1 %>% filter(Analysis != "Time stratified: 2 weeks"), 
-               aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 9, position=position_dodge(0.05)) +
+    #geom_point(data = Coverage1 %>% filter(Analysis == "Time stratified: 2 weeks"), aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 7, shape = 23) +
+    geom_point(data = Coverage1, #%>% filter(Analysis != "Time stratified: 2 weeks")
+               aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 9, shape = 23) + #position=position_dodge(0.05),
     facet_grid(~Simulated_RR, switch = "x") + 
-    scale_shape_manual(values=c(23, 21, 22, 24)) +
     geom_hline(yintercept = .95, linetype = 2) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1), minor_breaks = seq(0 , 1, .05), breaks = seq(0, 1, .10)) +
-    scale_x_continuous(breaks = NULL, limits = c(.5,4.5)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1, scale = 100), minor_breaks = seq(0 , 1, .05), breaks = seq(0, 1, .20), limits = c(0,1)) +
+    scale_x_continuous(breaks = NULL, limits = c(.5, 2.75)) + #.5, 4.5
     theme_minimal(base_size = 22) +
     theme(legend.position = "none") +
     xlab("Simulated Relative Risk") +
