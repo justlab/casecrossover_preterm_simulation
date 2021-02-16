@@ -468,7 +468,7 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
 
 Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats, Temp_df){
 
-  Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day, Temp_df)
+  Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day_df, Temp_df)
 
   Bootstrapped_counts <- number_of_repeats %>%
     rerun(Random_draws(Parameters)) %>%
@@ -488,9 +488,9 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
 
 }
 
-# CCO_simulation_2007 <- Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all, 1000)
-# CCO_simulation_2018 <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all, 1000)
-# CCO_simulation_2018_notInduced <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_notInduced, 1000)
+# CCO_simulation_2007 <- Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all, 1000, LaGuardiaTemp1)
+# CCO_simulation_2018 <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all, 1000, LaGuardiaTemp1)
+# CCO_simulation_2018_notInduced <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_notInduced, 1000, LaGuardiaTemp1)
 
 
 #### Analyze Results ####
