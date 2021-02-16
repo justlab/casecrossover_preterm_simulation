@@ -612,34 +612,34 @@ Visualize_Results(CCO_simulation_2018_notInduced)
 ##
 Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
 
-year_of_analysis <- year(start_date)
+  year_of_analysis <- year(start_date)
 
-Temp_plot <- Temp_df %>%
-  filter(year(date)==year_of_analysis) %>%
-  ggplot() +
-  geom_line(aes(x = date, y = x), color = "blue") +
-  annotate("rect", fill = "orange", alpha = 0.25,
-           xmin = as.Date(start_date), xmax = as.Date(end_date),
-           ymin = -Inf, ymax = Inf)+
-  theme_minimal() +
-  theme(axis.title.x = element_blank()) +
-  ylab("Maximum Temperature (F)")
+  Temp_plot <- Temp_df %>%
+    filter(year(date)==year_of_analysis) %>%
+    ggplot() +
+    geom_line(aes(x = date, y = x), color = "blue") +
+    annotate("rect", fill = "orange", alpha = 0.25,
+             xmin = as.Date(start_date), xmax = as.Date(end_date),
+             ymin = -Inf, ymax = Inf)+
+    theme_minimal() +
+    theme(axis.title.x = element_blank()) +
+    ylab("Maximum Temperature (F)")
 
-Preterms_2018_plot <- Births_df %>%
-  group_by(date) %>%
-  summarise(`Preterm Births` = sum(Preterms)) %>%
-  filter(year(date)==year_of_analysis) %>%
-  ggplot() +
-  geom_line(aes(x = date, y = `Preterm Births`)) +
-  annotate("rect", fill = "orange", alpha = 0.25,
-           xmin = as.Date(start_date), xmax = as.Date(end_date),
-           ymin = -Inf, ymax = Inf) +
-  theme_minimal() +
-  xlab("Date")
+  Preterms_2018_plot <- Births_df %>%
+    group_by(date) %>%
+    summarise(`Preterm Births` = sum(Preterms)) %>%
+    filter(year(date)==year_of_analysis) %>%
+    ggplot() +
+    geom_line(aes(x = date, y = `Preterm Births`)) +
+    annotate("rect", fill = "orange", alpha = 0.25,
+             xmin = as.Date(start_date), xmax = as.Date(end_date),
+             ymin = -Inf, ymax = Inf) +
+    theme_minimal() +
+    xlab("Date")
 
-combined_plot <- ggarrange(Temp_plot, Preterms_2018_plot, ncol = 1, nrow = 2, labels = "AUTO")
+  combined_plot <- ggarrange(Temp_plot, Preterms_2018_plot, ncol = 1, nrow = 2, labels = "AUTO")
 
-return(combined_plot)
+  return(combined_plot)
 }
 
 
