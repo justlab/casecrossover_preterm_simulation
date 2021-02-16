@@ -147,68 +147,68 @@ ggplot(LaGuardiaTemp1, aes(x = date, y = x)) + geom_point() + geom_smooth(method
 ### Cleaning CDC Wonder and estimating all preterm births per day NYS   ####
 
 Clean_and_smooth_data <- function(NYBirths_by_Month_plural_file, NYBirths_by_Weekday_file){
-#pulling out annual pattern of proportion births per month
-NYBirths_by_Month_plural <- read_tsv(NYBirths_by_Month_plural_file)
-NYBirths_by_Month1 <- NYBirths_by_Month_plural %>%
-  filter(!is.na(Month),
-         `Plurality or Multiple Birth`=="Single") %>%
-  rename("Month_number" = `Month Code`) %>%
-  select(Year, Month, Month_number, Births) %>%
-  mutate(Month = factor(Month, levels = month.name)) %>%
-  group_by(Year) %>%
-  mutate(Births_Year = sum(Births),
-         Pct_of_total_births = Births/Births_Year) %>%
-  ungroup()
+  #pulling out annual pattern of proportion births per month
+  NYBirths_by_Month_plural <- read_tsv(NYBirths_by_Month_plural_file)
+  NYBirths_by_Month1 <- NYBirths_by_Month_plural %>%
+    filter(!is.na(Month),
+           `Plurality or Multiple Birth`=="Single") %>%
+    rename("Month_number" = `Month Code`) %>%
+    select(Year, Month, Month_number, Births) %>%
+    mutate(Month = factor(Month, levels = month.name)) %>%
+    group_by(Year) %>%
+    mutate(Births_Year = sum(Births),
+           Pct_of_total_births = Births/Births_Year) %>%
+    ungroup()
 
-#get raw number of singleton births per month of each year
-NYBirths_by_MonthYear <- NYBirths_by_Month1 %>%
-  distinct(Year, Month_number, Births, Births_Year)
+  #get raw number of singleton births per month of each year
+  NYBirths_by_MonthYear <- NYBirths_by_Month1 %>%
+    distinct(Year, Month_number, Births, Births_Year)
 
-#Estimate how many births take place in a given week of the year
-NYBirths_by_Month2 <- NYBirths_by_Month1 %>%
-  mutate(Week_Births = Births/4, #split by week -- assuming the average is representative of the middle of the series
-         FirstWk = week(as.Date(paste(Year, Month_number,"01", sep = "-")))) %>%
-  rowwise() %>%
-  mutate(Week = sample(1:2, 1)) %>%
-  ungroup() %>% #to stop rowwise
-  mutate(Wk_of_Year = FirstWk + Week) %>% #randomly selecting either the 2nd or 3rd week to represent middle of time series
-  group_by(Year) %>%
-  complete(Wk_of_Year = seq(1,52)) %>%
-  ungroup() %>%
-  mutate(date = as.Date(paste(Year, Wk_of_Year, 1, sep="-"), "%Y-%U-%u"),
-         Month_number = if_else(is.na(Month_number), month(date), Month_number)) %>%
-  coalesce_join(., NYBirths_by_MonthYear, by = c("Year", "Month_number")) %>%
-  rename("Month_Births" = "Births") %>%
-  mutate(Week_Births1 = floor(na.approx(Week_Births, rule = 2)), #linear interpolation of births between middle of month estimates
-         Week_Births_Pct = Week_Births1/Births_Year) %>%
-  dplyr::select(date, Year, Wk_of_Year, Month_number, Week_Births1, Week_Births_Pct)
+  #Estimate how many births take place in a given week of the year
+  NYBirths_by_Month2 <- NYBirths_by_Month1 %>%
+    mutate(Week_Births = Births/4, #split by week -- assuming the average is representative of the middle of the series
+           FirstWk = week(as.Date(paste(Year, Month_number,"01", sep = "-")))) %>%
+    rowwise() %>%
+    mutate(Week = sample(1:2, 1)) %>%
+    ungroup() %>% #to stop rowwise
+    mutate(Wk_of_Year = FirstWk + Week) %>% #randomly selecting either the 2nd or 3rd week to represent middle of time series
+    group_by(Year) %>%
+    complete(Wk_of_Year = seq(1,52)) %>%
+    ungroup() %>%
+    mutate(date = as.Date(paste(Year, Wk_of_Year, 1, sep="-"), "%Y-%U-%u"),
+           Month_number = if_else(is.na(Month_number), month(date), Month_number)) %>%
+    coalesce_join(., NYBirths_by_MonthYear, by = c("Year", "Month_number")) %>%
+    rename("Month_Births" = "Births") %>%
+    mutate(Week_Births1 = floor(na.approx(Week_Births, rule = 2)), #linear interpolation of births between middle of month estimates
+           Week_Births_Pct = Week_Births1/Births_Year) %>%
+    dplyr::select(date, Year, Wk_of_Year, Month_number, Week_Births1, Week_Births_Pct)
 
-#1) Births by day of week
-NYBirths_by_Weekday <- read_tsv(NYBirths_by_Weekday_file)
-NYBirths_by_Weekday1 <- NYBirths_by_Weekday %>%
-  filter(`Plurality or Multiple Birth`=="Single") %>%
-  rename("Month_number" = `Month Code`) %>%
-  select(Year, Month, Month_number, Births, Weekday) %>%
-  mutate(Month = factor(Month, levels = month.name)) %>%
-  group_by(Month_number, Year) %>%
-  mutate(Births_Month = sum(Births),
-         Prop_Births_Wkday = Births/Births_Month)
+  #1) Births by day of week
+  NYBirths_by_Weekday <- read_tsv(NYBirths_by_Weekday_file)
+  NYBirths_by_Weekday1 <- NYBirths_by_Weekday %>%
+    filter(`Plurality or Multiple Birth`=="Single") %>%
+    rename("Month_number" = `Month Code`) %>%
+    select(Year, Month, Month_number, Births, Weekday) %>%
+    mutate(Month = factor(Month, levels = month.name)) %>%
+    group_by(Month_number, Year) %>%
+    mutate(Births_Month = sum(Births),
+           Prop_Births_Wkday = Births/Births_Month)
 
-#2) use to create a new df for day of year and projected proportion of births
-All_Dates_inTimePeriod <- tibble(date = seq.Date(as.Date("2007-01-01"), as.Date("2018-12-31"), by = "day")) %>%
-  mutate(Wk_of_Year = week(date),
-         Year = year(date))
+  #2) use to create a new df for day of year and projected proportion of births
+  All_Dates_inTimePeriod <- tibble(date = seq.Date(as.Date("2007-01-01"), as.Date("2018-12-31"), by = "day")) %>%
+    mutate(Wk_of_Year = week(date),
+           Year = year(date))
 
-NYBirths_by_Day <- All_Dates_inTimePeriod %>%
-  coalesce_join(., NYBirths_by_Month2, by = c("Year", "Wk_of_Year")) %>%
-  mutate(Weekday = as.character(wday(date, label = TRUE, abbr = FALSE))) %>%
-  left_join(., NYBirths_by_Weekday1, by = c("Year","Month_number","Weekday")) %>%
-  mutate(Births_date = floor(Week_Births1 * Prop_Births_Wkday),
-         Wk_of_Year = if_else(Wk_of_Year == 53, 52, Wk_of_Year)) %>%
-  fill(., Month_number:Week_Births_Pct,Month, Births_Month, .direction = "down") %>%
-  mutate(Births_date = na.approx(Births_date, rule = 2))
+  NYBirths_by_Day <- All_Dates_inTimePeriod %>%
+    coalesce_join(., NYBirths_by_Month2, by = c("Year", "Wk_of_Year")) %>%
+    mutate(Weekday = as.character(wday(date, label = TRUE, abbr = FALSE))) %>%
+    left_join(., NYBirths_by_Weekday1, by = c("Year","Month_number","Weekday")) %>%
+    mutate(Births_date = floor(Week_Births1 * Prop_Births_Wkday),
+           Wk_of_Year = if_else(Wk_of_Year == 53, 52, Wk_of_Year)) %>%
+    fill(., Month_number:Week_Births_Pct,Month, Births_Month, .direction = "down") %>%
+    mutate(Births_date = na.approx(Births_date, rule = 2))
 
-return(NYBirths_by_Day)
+  return(NYBirths_by_Day)
 }
 
 Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_WklyGestAge_07to18_file, Annual_Singleton_Births_file){
