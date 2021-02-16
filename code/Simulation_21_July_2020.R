@@ -133,10 +133,15 @@ getSeason <- function(input.date){
 #### Cleaning Temperature Data ####
 
 #Visualize min and max temp at LaGuardia Airport
-LaGuardiaTemp1 <- LaGuardiaTemp %>%
-  mutate(date = mdy(DATE)) %>%
-  rename("x" = "TMAX") %>%
-  dplyr::select(date, x)
+load_temp <- function(LaGuardiaTemp_file){
+  LaGuardiaTemp <- read_tsv(LaGuardiaTemp_file)
+  LaGuardiaTemp1 <- LaGuardiaTemp %>%
+    mutate(date = mdy(DATE)) %>%
+    rename("x" = "TMAX") %>%
+    dplyr::select(date, x)
+  LaGuardiaTemp1
+}
+LaGuardiaTemp1 <- load_temp(LaGuardiaTemp_file)
 
 ggplot(LaGuardiaTemp1, aes(x = date, y = x)) + geom_point() + geom_smooth(method = "lm", se = FALSE) +
   labs(title = "Observed max temperatures at LaGuardia Airport") +
@@ -352,7 +357,7 @@ Preterms_per_day_notInduced <- Estimate_nonInduced_daily_preterms(NYBirths_by_Da
 #### Creating Simulations and conducting case crossovers ####
 
 ##need to create lambdas ###
-Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df){ ##RR per 10F
+Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df, LaGuardiaTemp1){ ##RR per 10F
 
   RiskRatios <- tibble(RR_per_10F = seq.default(from = .9, to = 1.25, length.out = 8),
                        Simulated_RR = seq.default(from = .9, to = 1.25, length.out = 8)) %>%
@@ -457,9 +462,9 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
 #create parameters for 2007 and 2018
 plan(multisession(workers = 14)) #for parallelization
 
-Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats){
+Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats, Temp_df){
 
-  Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day)
+  Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day, Temp_df)
 
   Bootstrapped_counts <- number_of_repeats %>%
     rerun(Random_draws(Parameters)) %>%
