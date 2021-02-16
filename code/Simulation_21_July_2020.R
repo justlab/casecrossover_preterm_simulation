@@ -143,10 +143,12 @@ load_temp <- function(LaGuardiaTemp_file){
 }
 LaGuardiaTemp1 <- load_temp(LaGuardiaTemp_file)
 
-ggplot(LaGuardiaTemp1, aes(x = date, y = x)) + geom_point() + geom_smooth(method = "lm", se = FALSE) +
-  labs(title = "Observed max temperatures at LaGuardia Airport") +
-  ylab("Max temperature (F)") +
-  theme(text = element_text(size = 15))
+plot_temp <- function(LaGuardiaTemp1){
+  ggplot(LaGuardiaTemp1, aes(x = date, y = x)) + geom_point() + geom_smooth(method = "lm", se = FALSE) +
+    labs(title = "Observed max temperatures at LaGuardia Airport") +
+    ylab("Max temperature (F)") +
+    theme(text = element_text(size = 15))
+}
 
 
 ### Cleaning CDC Wonder and estimating all preterm births per day NYS   ####
@@ -594,7 +596,7 @@ Visualize_Results <- function(results_df){
 
   combined_plot <- ggarrange(Bias_plot, Coverage_plot, ncol = 1, nrow = 2, labels = "AUTO")
   return(combined_plot)
-  }
+}
 
 
 Create_table_of_bias_results(CCO_simulation_2007)
