@@ -282,7 +282,7 @@ Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_singl
   return(Preterms_per_day_all)
 }
 
-Estimate_nonInduced_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_GestWeek_notInduced_file, Annual_Singleton_Births_file){
+Estimate_nonInduced_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_GestWeek_notInduced_file, Annual_Singleton_Births_file, NYBirths_by_Month_single_notInduced_file){
 
   Annual_Singleton_Births <- read_tsv(Annual_Singleton_Births_file)
   Annual_Singleton_Births1 <- Annual_Singleton_Births %>%
@@ -309,6 +309,7 @@ Estimate_nonInduced_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Mont
     mutate(Year_Births_perAge = as.numeric(na_if(Year_Births_perAge, "Suppressed")),
            Year_Births_perAge = ifelse(is.na(Year_Births_perAge), sample(5:9, 1), Year_Births_perAge))
 
+  NYBirths_by_Month_single_notInduced <- read_tsv(NYBirths_by_Month_single_notInduced_file)
   NYBirths_by_Month_single_notInduced1 <- NYBirths_by_Month_single_notInduced %>%
     rename("Month_number" = `Month Code`,
            Gest_Age = `LMP Gestational Age Weekly Code`) %>%
@@ -346,7 +347,7 @@ Estimate_nonInduced_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Mont
 
 NYBirths_by_Day <- Clean_and_smooth_data(NYBirths_by_Month_plural_file, NYBirths_by_Weekday_file, NYBirths_by_Month_single_file)
 Preterms_per_day_all <- Estimate_all_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_WklyGestAge_07to18, Annual_Singleton_Births_file)
-Preterms_per_day_notInduced <- Estimate_nonInduced_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_GestWeek_notInduced_file, Annual_Singleton_Births_file)
+Preterms_per_day_notInduced <- Estimate_nonInduced_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_GestWeek_notInduced_file, Annual_Singleton_Births_file, NYBirths_by_Month_single_notInduced_file)
 
 #### Creating Simulations and conducting case crossovers ####
 
