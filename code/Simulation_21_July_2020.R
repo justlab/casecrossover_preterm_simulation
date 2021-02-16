@@ -134,7 +134,7 @@ getSeason <- function(input.date){
 
 #Visualize min and max temp at LaGuardia Airport
 load_temp <- function(LaGuardiaTemp_file){
-  LaGuardiaTemp <- read_tsv(LaGuardiaTemp_file)
+  LaGuardiaTemp <- read_csv(LaGuardiaTemp_file)
   LaGuardiaTemp1 <- LaGuardiaTemp %>%
     mutate(date = mdy(DATE)) %>%
     rename("x" = "TMAX") %>%

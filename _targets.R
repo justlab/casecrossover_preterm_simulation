@@ -1,4 +1,5 @@
 library(targets)
+source("code/Simulation_21_July_2020.R")
 tar_option_set(
   packages = c(
     "tidyverse",
@@ -26,5 +27,7 @@ list(
   #tar_target(unused ,"data/PretermBirths_NY_byDay_2018.txt", format = "file"),
   #tar_target(unused ,"data/FullTermBirths_NY_byDay_2018.txt", format = "file"),
   tar_target(Births_GestWeek_notInduced_file ,"data/NotInduced2018NYSBirths_singleton.txt", format = "file"),
-  tar_target(NYBirths_by_Month_single_notInduced_file ,"data/NotInduced2018NYSBirths_bymonth_singleton.txt", format = "file")
+  tar_target(NYBirths_by_Month_single_notInduced_file ,"data/NotInduced2018NYSBirths_bymonth_singleton.txt", format = "file"),
+
+  tar_target(LaGuardiaTemp1, load_temp(LaGuardiaTemp_file))
 )
