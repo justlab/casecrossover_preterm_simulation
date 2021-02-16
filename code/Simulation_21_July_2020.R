@@ -164,7 +164,7 @@ ggplot(LaGuardiaTemp1, aes(x = date, y = x)) + geom_point() + geom_smooth(method
 
 ### Cleaning CDC Wonder and estimating all preterm births per day NYS   ####
 
-Clean_and_smooth_data <- function(NYBirths_by_Month_plural, NYBirths_by_Weekday, NYBirths_by_Month_single){
+Clean_and_smooth_data <- function(NYBirths_by_Month_plural, NYBirths_by_Weekday){
 #pulling out annual pattern of proportion births per month
 NYBirths_by_Month1 <- NYBirths_by_Month_plural %>% 
   filter(!is.na(Month),
