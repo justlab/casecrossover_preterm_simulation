@@ -1,22 +1,5 @@
-suppressPackageStartupMessages({
-  library(tidyverse)
-  library(here)
-  library(lubridate)
-  library(survival)
-  library(broom)
-  library(zoo)
-  library(splines)
-  # library(devtools)
-  # devtools::install_github("DavisVaughan/furrr")
-  library(furrr)
-  library(scales)
-  #install.packages("ggpubr")
-  library(ggpubr)
-})
-
 
 #### Functions used throughout ####
-
 
 coalesce_join <- function(x, y,
                           by = NULL, suffix = c(".x", ".y"),
@@ -354,10 +337,6 @@ Estimate_nonInduced_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Mont
   return(Preterms_per_day_notInduced)
 }
 
-# NYBirths_by_Day <- Clean_and_smooth_data(NYBirths_by_Month_plural_file, NYBirths_by_Weekday_file, NYBirths_by_Month_single_file)
-# Preterms_per_day_all <- Estimate_all_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_WklyGestAge_07to18, Annual_Singleton_Births_file)
-# Preterms_per_day_notInduced <- Estimate_nonInduced_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_GestWeek_notInduced_file, Annual_Singleton_Births_file, NYBirths_by_Month_single_notInduced_file)
-
 #### Creating Simulations and conducting case crossovers ####
 
 ##need to create lambdas ###
@@ -463,8 +442,6 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
 
 }
 
-#create parameters for 2007 and 2018
-#plan(multisession(workers = 14)) #for parallelization
 
 Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats, Temp_df){
 
@@ -479,7 +456,7 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
     mutate(Round_of_Sim = row_number(),
            Splits = paste(Simulated_RR, Round_of_Sim, sep = ".")) %>% #creating one variable on which to split for parallelization
     ungroup()
-
+  
   Results_CaseCrossovers <- Bootstrapped_counts %>%
     split(.$Splits) %>%
     future_map_dfr(., ~Case_Crossovers(.x), .progress = T)
@@ -487,11 +464,6 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
   return(Results_CaseCrossovers)
 
 }
-
-# CCO_simulation_2007 <- Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all, 1000, LaGuardiaTemp1)
-# CCO_simulation_2018 <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all, 1000, LaGuardiaTemp1)
-# CCO_simulation_2018_notInduced <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_notInduced, 1000, LaGuardiaTemp1)
-
 
 #### Analyze Results ####
 Create_table_of_bias_results <- function(Simulation_results){
@@ -600,20 +572,6 @@ Visualize_Results <- function(results_df){
   return(combined_plot)
 }
 
-
-# Create_table_of_bias_results(CCO_simulation_2007)
-# Create_table_of_bias_results(CCO_simulation_2018)
-# Create_table_of_bias_results(CCO_simulation_2018_notInduced)
-#
-# Create_table_of_coverage_results(CCO_simulation_2007)
-# Create_table_of_coverage_results(CCO_simulation_2018)
-# Create_table_of_coverage_results(CCO_simulation_2018_notInduced)
-#
-# Visualize_Results(CCO_simulation_2007)
-# Visualize_Results(CCO_simulation_2018) #1450 x 750
-# Visualize_Results(CCO_simulation_2018_notInduced)
-
-##
 Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
 
   year_of_analysis <- year(start_date)
@@ -645,7 +603,3 @@ Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
 
   return(combined_plot)
 }
-
-
-# Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2007-05-01", "2007-10-01") #700*550
-# Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2018-05-01", "2018-10-01")
