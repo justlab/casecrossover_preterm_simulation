@@ -444,7 +444,7 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
 
 
 Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats, Temp_df){
-
+  plan(multiprocess, workers = 14)
   Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day_df, Temp_df)
 
   Bootstrapped_counts <- number_of_repeats %>%
@@ -457,8 +457,11 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
            Splits = paste(Simulated_RR, Round_of_Sim, sep = ".")) %>% #creating one variable on which to split for parallelization
     ungroup()
   
-  Results_CaseCrossovers <- Bootstrapped_counts %>%
-    split(.$Splits) %>%
+  message("Bootstrapped")
+  split_counts <- Bootstrapped_counts %>% split(.$Splits)
+  
+  message("Split, starting future_map_dfr...")
+  Results_CaseCrossovers <- split_counts %>%
     future_map_dfr(., ~Case_Crossovers(.x), .progress = T)
 
   return(Results_CaseCrossovers)

@@ -1,4 +1,6 @@
 library(targets)
+library(future)
+plan(multisession)
 source("code/Simulation_21_July_2020.R")
 tar_option_set(
   packages = c(
@@ -12,7 +14,8 @@ tar_option_set(
     "furrr",
     "scales",
     "ggpubr"
-  )
+  )#,
+  #error = "workspace"
 )
 list(
   # INPUT DATA ####
@@ -49,8 +52,8 @@ list(
 
   # SIMULATIONS ####
   tar_target(CCO_simulation_2007,
-              Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all,
-                                       1000, LaGuardiaTemp1)),
+             Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all,
+                                      1000, LaGuardiaTemp1)),
   tar_target(CCO_simulation_2018,
               Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all,
                                        1000, LaGuardiaTemp1)),
@@ -62,7 +65,7 @@ list(
   tar_target(laguardia_temp_plot,
               plot_temp(LaGuardiaTemp1)),
   tar_target(table_bias_2007,
-              Create_table_of_bias_results(CCO_simulation_2007)),
+             Create_table_of_bias_results(CCO_simulation_2007)),
   tar_target(table_bias_2018,
               Create_table_of_bias_results(CCO_simulation_2018)),
   tar_target(table_bias_2018_notInduced,
@@ -74,7 +77,7 @@ list(
   tar_target(table_coverage_2018_notInduced,
               Create_table_of_coverage_results(CCO_simulation_2018_notInduced)),
   tar_target(vis_2007,
-              Visualize_Results(CCO_simulation_2007)),
+             Visualize_Results(CCO_simulation_2007)),
   tar_target(vis_2018,
               Visualize_Results(CCO_simulation_2018)),
   tar_target(vis_2018_notInduced,
