@@ -477,7 +477,7 @@ Create_table_of_bias_results <- function(Simulation_results){
     ungroup()
 
   Bias_Estimates <- Results_CaseCrossovers %>%
-    mutate(Bias_per_10F = (estimate*10) - log(Simulated_RR),#exp((estimate*10)-log(Simulated_RR))
+    mutate(Bias_per_10F = round((estimate*10) - log(Simulated_RR), 3),#exp((estimate*10)-log(Simulated_RR))
            Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_Month_GestAge", "CCO_Month_PropMth"), 
                              labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: Month,\nAdjustment: Gestational Age", 
                                         "Time Stratified: Month,\nAdjustment: Proportion of Month"))) 
@@ -594,7 +594,7 @@ Visualize_Percent_Bias <- function(results_df){
     ungroup()
   
   Bias_Estimates <- Results_CaseCrossovers1 %>%
-    mutate(Bias_per_10F = ((estimate - log(Simulated_RR)/10)/(log(Simulated_RR)/10))*100)
+    mutate(Bias_per_10F = (estimate - log(Simulated_RR)/10)/(log(Simulated_RR)/10))
   
   Bias_plot <- ggplot(Bias_Estimates) + 
     geom_boxplot(aes(Simulated_RR, Bias_per_10F, fill = Analysis), width = .5) + 
@@ -602,6 +602,7 @@ Visualize_Percent_Bias <- function(results_df){
     ylab("Bias") + 
     theme_minimal(base_size = 22) +
     scale_x_continuous(breaks = NULL) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1, scale = 100)) + 
     theme(legend.position = "bottom",
           axis.title.x = element_blank(),
           legend.title = element_blank())
@@ -642,22 +643,11 @@ Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
   return(combined_plot)
 }
 
-#Balance in control selection
-
-# Case_days_2018 <- Preterms_per_day_all %>%
-#   filter(date>="2018-05-01" & date < "2018-10-01") %>%
-#   uncount(Preterms) %>%
-#   mutate(Participant = row_number(),
-#          Case = 1) %>%
-#   select(date, Gest_Age, Participant, Case)
-# 
-# Balance_MonthStrat <- bind_rows(Case_days_2018, Month_stratification(Case_days_2018))
-# 
-# Balance_BiweeklyStrat <- bind_rows(Case_days_2018, Biweekly_stratification(Case_days_2018))
-# 
-# Balance_BiweeklyStrat %>%
-#   pivot_wider(id_cols = Participant, names_from = Case, values_from = date) %>%
-#   mutate(Before = if_else(`0`<`1`, 1, 0),
-#          After = if_else(`0`> `1`, 1, 0)) %>%
-#   summarise(Prop_before = sum(Before)/nrow(.),
-#             Prop_after = sum(After)/nrow(.))
+# Median_OR_2018 <- CCO_simulation_2018 %>%
+#   filter(Simulated_RR == 1.05 & (Analysis=="CCO_2week" | Analysis=="CCO_Month")) %>%
+#   group_by(Analysis, Simulated_RR) %>%
+#   mutate(Round_of_Sim = row_number(),
+#          Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month"), 
+#                            labels = c("Time stratified: 2 weeks", "Time Stratified: Month"))) %>%
+#   summarise(Median_OR = exp(median(estimate)*10))
+  
