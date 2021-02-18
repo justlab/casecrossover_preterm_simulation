@@ -15,17 +15,12 @@ library(ggpubr)
 
 
 #Datasets#
-Births_GestWeek_LMP <- read_tsv(here::here("data", "Births_byWeek_LMP_NYS_2018.txt"))
-Births_GestAge_LMP <- read_tsv(here::here("data", "Yr_Month_GestAge_Plurality_NYS_2007to18.txt"))
-Births_WklyGestAge_07to18 <- read_tsv(here::here("data", "Births_NYS_Year_SingletonGestAge.txt"))
-NYBirths_by_Weekday <- read_tsv(here::here("data", "Day_of_Wk_Natality_NY_2007to18.txt"))
-NYBirths_by_Month_plural <- read_tsv(here::here("data", "Plurality_by_MonthYear_CDCWONDER.txt"))
-NYBirths_by_Month_single <- read_tsv(here::here("data", "Births_NYS_YrMonth_SingletonGestAge.txt"))
-Annual_Singleton_Births <- read_tsv(here::here("data", "Annual_Singleton_NYS.txt"))
+Births_WklyGestAge_07to18 <- read_tsv(here::here("data", "Births_NYS_Year_SingletonGestAge.txt")) 
+NYBirths_by_Weekday <- read_tsv(here::here("data", "Day_of_Wk_Natality_NY_2007to18.txt")) 
+NYBirths_by_Month_plural <- read_tsv(here::here("data", "Plurality_by_MonthYear_CDCWONDER.txt")) 
+NYBirths_by_Month_single <- read_tsv(here::here("data", "Births_NYS_YrMonth_SingletonGestAge.txt")) 
+Annual_Singleton_Births <- read_tsv(here::here("data", "Annual_Singleton_NYS.txt")) 
 LaGuardiaTemp <- read_csv(here::here("data", "LaGuardiaTemp_2007to2018.csv")) 
-Preterm_by_Month <- read_tsv(here::here("data", "Births_YrMnth_GestationalAge_NYS.txt"))
-Preterm_by_Day <- read_tsv(here::here("data", "PretermBirths_NY_byDay_2018.txt"))
-Fullterm_by_Day <- read_tsv(here::here("data", "FullTermBirths_NY_byDay_2018.txt"))
 
 
 #### Functions used throughout ####
@@ -56,7 +51,38 @@ coalesce_join <- function(x, y,
   dplyr::bind_cols(joined, coalesced)[cols]
 }
 
-Month_stratification <- function(Hazard_Periods){ #this is based on a time stratified control day selection. Strata = months
+Biweekly_stratification <- function(Hazard_Periods){ #time stratified approach for 2 week periods 
+  
+  Year <- as.character(year(Hazard_Periods$date)[1]) #pick out 1 observation to get year
+  Dates_in_Year <- seq.Date(from = as.Date(paste0(Year, "-1-1")), to = as.Date(paste0(Year, "-12-31")), by = "day")
+  Date_control_match <- tibble(date = Dates_in_Year) %>%
+    mutate(Week = week(date),
+           Week = if_else(Week == 53, 52, Week),
+           Day = row_number(date),
+           WkDay = wday(date),
+           Strata = ceiling(Day/14),
+           Strata = if_else(Strata == 27, 26, Strata))
+  
+  Sequence <- tibble(Sequence = rep.int(1:14, 26)) %>%
+    add_row(Sequence = 14)
+  
+  Date_control_match1 <- bind_cols(Date_control_match, Sequence) %>%
+    group_by(Strata) %>%
+    mutate(Control_Period = if_else(Sequence<=7, date + days(7), date - days(7))) %>%
+    ungroup() %>%
+    rename("Hazard_period" = "date") 
+
+  Control_Periods <- Hazard_Periods %>% 
+    ungroup() %>%
+    left_join(., Date_control_match1, by = c("date" = "Hazard_period")) %>%
+    dplyr::select(Control_Period, Participant) %>%
+    mutate(Case = 0) %>%
+    rename("date" = "Control_Period")
+  
+  return(Control_Periods)
+}
+
+Month_stratification <- function(Hazard_Periods){ 
   
   Control_Periods <- Hazard_Periods %>%
     mutate(Month = month(date),
@@ -93,9 +119,9 @@ Month_stratification <- function(Hazard_Periods){ #this is based on a time strat
     rename(date = "Ctrldate3",
            Gest_Age = "GestAge_Ctrldate3") %>%
     bind_rows(., Gest_Ages1, Gest_Ages2)
-    
+  
   Control_Periods1 <- Control_Periods %>%
-  dplyr::select(Participant, Ctrldate1, Ctrldate2, Ctrldate3) %>%
+    dplyr::select(Participant, Ctrldate1, Ctrldate2, Ctrldate3) %>%
     group_by(Participant) %>%
     gather("Control_day", "date", Ctrldate1:Ctrldate3) %>% 
     mutate(Case = 0) %>%
@@ -103,37 +129,6 @@ Month_stratification <- function(Hazard_Periods){ #this is based on a time strat
     left_join(., Gest_Ages3, by = c("Participant", "date"))
   
   return(Control_Periods1)
-}
-
-Biweekly_stratification <- function(Hazard_Periods){ #time stratified approach for 2 week periods 
-  
-  Year <- as.character(year(Hazard_Periods$date)[1]) #pick out 1 observation to get year
-  Dates_in_Year <- seq.Date(from = as.Date(paste0(Year, "-1-1")), to = as.Date(paste0(Year, "-12-31")), by = "day")
-  Date_control_match <- tibble(date = Dates_in_Year) %>%
-    mutate(Week = week(date),
-           Week = if_else(Week == 53, 52, Week),
-           Day = row_number(date),
-           WkDay = wday(date),
-           Strata = ceiling(Day/14),
-           Strata = if_else(Strata == 27, 26, Strata))
-  
-  Sequence <- tibble(Sequence = rep.int(1:14, 26)) %>%
-    add_row(Sequence = 14)
-  
-  Date_control_match1 <- bind_cols(Date_control_match, Sequence) %>%
-    group_by(Strata) %>%
-    mutate(Control_Period = if_else(Sequence<=7, date + days(7), date - days(7))) %>%
-    ungroup() %>%
-    rename("Hazard_period" = "date") 
-
-  Control_Periods <- Hazard_Periods %>% 
-    ungroup() %>%
-    left_join(., Date_control_match1, by = c("date" = "Hazard_period")) %>%
-    dplyr::select(Control_Period, Participant) %>%
-    mutate(Case = 0) %>%
-    rename("date" = "Control_Period")
-  
-  return(Control_Periods)
 }
 
 getSeason <- function(input.date){
@@ -323,6 +318,8 @@ Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df){ ##
 }
 
 Random_draws <- function(Parameters_df){ #make a function to repeat x times for monte carlo
+  
+  set.seed(0)
   
   MonteCarlo_df <- Parameters_df %>%
     rowwise() %>% 
