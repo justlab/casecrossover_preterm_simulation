@@ -274,68 +274,6 @@ Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_singl
   return(Preterms_per_day_all)
 }
 
-Estimate_nonInduced_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_GestWeek_notInduced_file, Annual_Singleton_Births_file, NYBirths_by_Month_single_notInduced_file){
-
-  Annual_Singleton_Births <- read_tsv(Annual_Singleton_Births_file, col_types = cols())
-  Annual_Singleton_Births1 <- Annual_Singleton_Births %>%
-    filter(is.na(Notes)) %>%
-    rename(Total_Singleton_Births_Year = "Births") %>%
-    select(Year, Total_Singleton_Births_Year)
-
-  NYBirths_by_Month_single <- read_tsv(NYBirths_by_Month_single_file, col_types = cols())
-  MonthBirths_total <- NYBirths_by_Month_single %>%
-    filter(Notes == "Total" & !is.na(`Month Code`)) %>%
-    rename("Month_number" = `Month Code`) %>%
-    mutate(Births_month = as.numeric(Births)) %>%
-    select(Year, Month_number, Births_month)
-
-  ## Just those singleton births that arent induced with gestational age
-  Births_GestWeek_notInduced <- read_tsv(Births_GestWeek_notInduced_file, col_types = cols())
-  Births_GestWeek_notInduced_a <- Births_GestWeek_notInduced %>%
-    filter(is.na(Notes) & "LMP Gestational Age Weekly Code" != 99) %>%
-    rename(Gest_Age = "LMP Gestational Age Weekly Code",
-           Year_Births_perAge = "Births") %>%
-    select(Gest_Age, Year_Births_perAge) %>%
-    mutate(Year = 2018) %>%
-    left_join(., Annual_Singleton_Births1, by = "Year") %>%
-    mutate(Year_Births_perAge = as.numeric(na_if(Year_Births_perAge, "Suppressed")),
-           Year_Births_perAge = ifelse(is.na(Year_Births_perAge), sample(5:9, 1), Year_Births_perAge))
-
-  NYBirths_by_Month_single_notInduced <- read_tsv(NYBirths_by_Month_single_notInduced_file, col_types = cols())
-  NYBirths_by_Month_single_notInduced1 <- NYBirths_by_Month_single_notInduced %>%
-    rename("Month_number" = `Month Code`,
-           Gest_Age = `LMP Gestational Age Weekly Code`) %>%
-    filter(!is.na(Gest_Age)) %>%
-    select(Month, Month_number, Gest_Age, Births) %>%
-    mutate(Month = factor(Month, levels = month.name),
-           Year = 2018) %>%
-    left_join(., MonthBirths_total, by = c("Year", "Month_number")) %>%
-    left_join(., Births_GestWeek_notInduced_a, by = c("Year", "Gest_Age"))
-
-  Lowest_Preterm_Prop_notSuppressed1 <- NYBirths_by_Month_single_notInduced1 %>%
-    filter(Births != "Suppressed") %>%
-    group_by(Year, Month_number) %>%
-    slice_min(order_by = Gest_Age) %>%
-    ungroup() %>%
-    mutate(Prop_of_LowestPreterm = as.numeric(Births)/Year_Births_perAge) %>%
-    select(Year, Month_number, Prop_of_LowestPreterm)
-
-  NYBirths_by_Month_single_notInduced2 <- NYBirths_by_Month_single_notInduced1 %>%
-    left_join(., Lowest_Preterm_Prop_notSuppressed1, by = c("Year", "Month_number")) %>%
-    mutate(Births = as.numeric(na_if(Births, "Suppressed")),
-           Births = if_else(is.na(Births), floor(Year_Births_perAge*Prop_of_LowestPreterm), Births),
-           Prop_Births = Births/Births_month) %>%
-    filter(Gest_Age < 37) %>%
-    dplyr::select(Year, Month_number, Gest_Age, Prop_Births)
-
-  Preterms_per_day_notInduced <- NYBirths_by_Day %>%
-    filter(year(date) == 2018) %>%
-    dplyr::select(date, Year, Wk_of_Year, Month_number, Births_date) %>%
-    full_join(., NYBirths_by_Month_single_notInduced2, by = c("Year", "Month_number")) %>%
-    mutate(Preterms = floor(Births_date*Prop_Births)) #round(Births_date*Prop_Births, 0)
-
-  return(Preterms_per_day_notInduced)
-}
 
 #### Creating Simulations and conducting case crossovers ####
 
@@ -574,13 +512,6 @@ Visualize_Results <- function(results_df){
   return(combined_plot)
 }
 
-Create_table_of_bias_results(CCO_simulation_2007)
-Create_table_of_bias_results(CCO_simulation_2018)
-Create_table_of_bias_results(CCO_simulation_2018_notInduced)
-
-Create_table_of_coverage_results(CCO_simulation_2007)
-Create_table_of_coverage_results(CCO_simulation_2018)
-Create_table_of_coverage_results(CCO_simulation_2018_notInduced)
 
 #calculate a signed percent bias of estimated from simulated
 Visualize_Percent_Bias <- function(results_df){ 
@@ -643,11 +574,3 @@ Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
   return(combined_plot)
 }
 
-# Median_OR_2018 <- CCO_simulation_2018 %>%
-#   filter(Simulated_RR == 1.05 & (Analysis=="CCO_2week" | Analysis=="CCO_Month")) %>%
-#   group_by(Analysis, Simulated_RR) %>%
-#   mutate(Round_of_Sim = row_number(),
-#          Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month"), 
-#                            labels = c("Time stratified: 2 weeks", "Time Stratified: Month"))) %>%
-#   summarise(Median_OR = exp(median(estimate)*10))
-  
