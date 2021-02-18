@@ -26,9 +26,6 @@ LaGuardiaTemp <- read_csv(here::here("data", "LaGuardiaTemp_2007to2018.csv"))
 Preterm_by_Month <- read_tsv(here::here("data", "Births_YrMnth_GestationalAge_NYS.txt"))
 Preterm_by_Day <- read_tsv(here::here("data", "PretermBirths_NY_byDay_2018.txt"))
 Fullterm_by_Day <- read_tsv(here::here("data", "FullTermBirths_NY_byDay_2018.txt"))
-Births_GestWeek_notInduced <- read_tsv(here::here("data", "NotInduced2018NYSBirths_singleton.txt"))
-NYBirths_by_Month_single_notInduced <- read_tsv(here::here("data", "NotInduced2018NYSBirths_bymonth_singleton.txt"))
-
 
 
 #### Functions used throughout ####
@@ -295,68 +292,8 @@ Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_singl
   return(Preterms_per_day_all) 
 }
 
-Estimate_nonInduced_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single, Births_GestWeek_notInduced, Annual_Singleton_Births){
-  
-  Annual_Singleton_Births1 <- Annual_Singleton_Births %>%
-    filter(is.na(Notes)) %>%
-    rename(Total_Singleton_Births_Year = "Births") %>%
-    select(Year, Total_Singleton_Births_Year)
-  
-  MonthBirths_total <- NYBirths_by_Month_single %>% 
-    filter(Notes == "Total" & !is.na(`Month Code`)) %>%
-    rename("Month_number" = `Month Code`) %>%
-    mutate(Births_month = as.numeric(Births)) %>%
-    select(Year, Month_number, Births_month) 
-  
-  ## Just those singleton births that arent induced with gestational age 
-  Births_GestWeek_notInduced_a <- Births_GestWeek_notInduced %>%
-    filter(is.na(Notes) & "LMP Gestational Age Weekly Code" != 99) %>%
-    rename(Gest_Age = "LMP Gestational Age Weekly Code",
-           Year_Births_perAge = "Births") %>%
-    select(Gest_Age, Year_Births_perAge) %>%
-    mutate(Year = 2018) %>%
-    left_join(., Annual_Singleton_Births1, by = "Year") %>%
-    mutate(Year_Births_perAge = as.numeric(na_if(Year_Births_perAge, "Suppressed")),
-           Year_Births_perAge = ifelse(is.na(Year_Births_perAge), sample(5:9, 1), Year_Births_perAge))
-  
-  NYBirths_by_Month_single_notInduced1 <- NYBirths_by_Month_single_notInduced %>%
-    rename("Month_number" = `Month Code`,
-           Gest_Age = `LMP Gestational Age Weekly Code`) %>%
-    filter(!is.na(Gest_Age)) %>%
-    select(Month, Month_number, Gest_Age, Births) %>%
-    mutate(Month = factor(Month, levels = month.name),
-           Year = 2018) %>%
-    left_join(., MonthBirths_total, by = c("Year", "Month_number")) %>%
-    left_join(., Births_GestWeek_notInduced_a, by = c("Year", "Gest_Age"))
-  
-  Lowest_Preterm_Prop_notSuppressed1 <- NYBirths_by_Month_single_notInduced1 %>%
-    filter(Births != "Suppressed") %>% 
-    group_by(Year, Month_number) %>%
-    slice_min(order_by = Gest_Age) %>%
-    ungroup() %>%
-    mutate(Prop_of_LowestPreterm = as.numeric(Births)/Year_Births_perAge) %>%
-    select(Year, Month_number, Prop_of_LowestPreterm)
-  
-  NYBirths_by_Month_single_notInduced2 <- NYBirths_by_Month_single_notInduced1 %>%
-    left_join(., Lowest_Preterm_Prop_notSuppressed1, by = c("Year", "Month_number")) %>%
-    mutate(Births = as.numeric(na_if(Births, "Suppressed")),
-           Births = if_else(is.na(Births), floor(Year_Births_perAge*Prop_of_LowestPreterm), Births),
-           Prop_Births = Births/Births_month) %>% 
-    filter(Gest_Age < 37) %>%
-    dplyr::select(Year, Month_number, Gest_Age, Prop_Births) 
-  
-  Preterms_per_day_notInduced <- NYBirths_by_Day %>% 
-    filter(year(date) == 2018) %>%
-    dplyr::select(date, Year, Wk_of_Year, Month_number, Births_date) %>%
-    full_join(., NYBirths_by_Month_single_notInduced2, by = c("Year", "Month_number")) %>%
-    mutate(Preterms = floor(Births_date*Prop_Births)) #round(Births_date*Prop_Births, 0)
-  
-  return(Preterms_per_day_notInduced)
-}
-
 NYBirths_by_Day <- Clean_and_smooth_data(NYBirths_by_Month_plural, NYBirths_by_Weekday, NYBirths_by_Month_single)
 Preterms_per_day_all <- Estimate_all_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single, Births_WklyGestAge_07to18, Annual_Singleton_Births)
-Preterms_per_day_notInduced <- Estimate_nonInduced_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single, Births_GestWeek_notInduced, Annual_Singleton_Births)
 
 #### Creating Simulations and conducting case crossovers ####
 
@@ -490,8 +427,6 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
 
 CCO_simulation_2007 <- Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all, 1000)
 CCO_simulation_2018 <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all, 1000)
-CCO_simulation_2018_notInduced <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_notInduced, 1000)
-
 
 #### Analyze Results ####
 Create_table_of_bias_results <- function(Simulation_results){
@@ -601,11 +536,9 @@ Visualize_Results <- function(results_df){
 
 Create_table_of_bias_results(CCO_simulation_2007)
 Create_table_of_bias_results(CCO_simulation_2018)
-Create_table_of_bias_results(CCO_simulation_2018_notInduced)
 
 Create_table_of_coverage_results(CCO_simulation_2007)
 Create_table_of_coverage_results(CCO_simulation_2018)
-Create_table_of_coverage_results(CCO_simulation_2018_notInduced)
 
 #calculate a signed percent bias of estimated from simulated
 Visualize_Percent_Bias <- function(results_df){ 
@@ -670,20 +603,13 @@ Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
 
 Visualize_Results(CCO_simulation_2007)
 Visualize_Results(CCO_simulation_2018) #1500 x 800
-Visualize_Results(CCO_simulation_2018_notInduced)
 
 Visualize_Percent_Bias(CCO_simulation_2007)
 Visualize_Percent_Bias(CCO_simulation_2018)
-Visualize_Percent_Bias(CCO_simulation_2018_notInduced)
+
 
 Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2007-05-01", "2007-10-01") #700*550
 Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2018-05-01", "2018-10-01")
 
-# Median_OR_2018 <- CCO_simulation_2018 %>%
-#   filter(Simulated_RR == 1.05 & (Analysis=="CCO_2week" | Analysis=="CCO_Month")) %>%
-#   group_by(Analysis, Simulated_RR) %>%
-#   mutate(Round_of_Sim = row_number(),
-#          Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month"), 
-#                            labels = c("Time stratified: 2 weeks", "Time Stratified: Month"))) %>%
-#   summarise(Median_OR = exp(median(estimate)*10))
+
   
