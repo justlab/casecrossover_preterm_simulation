@@ -477,15 +477,15 @@ Create_table_of_bias_results <- function(Simulation_results){
     ungroup()
 
   Bias_Estimates <- Results_CaseCrossovers %>%
-    mutate(Bias_OR = exp((estimate*10)-log(Simulated_RR)),
-           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_Month_GestAge", "CCO_Month_PropMth"),
-                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: Month,\nAdjustment: Gestational Age",
-                                        "Time Stratified: Month,\nAdjustment: Proportion of Month")))
-  Bias_Estimates1 <- Bias_Estimates %>%
+    mutate(Bias_per_10F = (estimate*10) - log(Simulated_RR),#exp((estimate*10)-log(Simulated_RR))
+           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_Month_GestAge", "CCO_Month_PropMth"), 
+                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: Month,\nAdjustment: Gestational Age", 
+                                        "Time Stratified: Month,\nAdjustment: Proportion of Month"))) 
+  Bias_Estimates1 <- Bias_Estimates %>% 
     group_by(Analysis) %>%
-    summarise(bias_median = median(Bias_OR),
-              bias_IQR = paste0(round(quantile(Bias_OR, .25), 3), "-", round(quantile(Bias_OR, .75), 3)))
-
+    summarise(bias_median = median(Bias_per_10F),
+              bias_IQR = paste0(round(quantile(Bias_per_10F, .25), 3), "-", round(quantile(Bias_per_10F, .75), 3)))
+  
   return(Bias_Estimates1)
 }
 
@@ -532,10 +532,10 @@ Visualize_Results <- function(results_df){
     ungroup()
 
   Bias_Estimates <- Results_CaseCrossovers1 %>%
-    mutate(Bias_OR = exp((estimate*10)-log(Simulated_RR)))
-
-  Bias_plot <- ggplot(Bias_Estimates) +
-    geom_boxplot(aes(Simulated_RR, Bias_OR, fill = Analysis)) +
+    mutate(Bias_per_10F = (estimate*10)-log(Simulated_RR)) 
+  
+  Bias_plot <- ggplot(Bias_Estimates) + 
+    geom_boxplot(aes(Simulated_RR, Bias_per_10F, fill = Analysis), width = .5) + 
     facet_grid(~Simulated_RR, scales = "free", switch = "x") +
     ylab("Bias") +
     theme_minimal(base_size = 22) +
@@ -558,14 +558,13 @@ Visualize_Results <- function(results_df){
     summarise(Coverage = (sum(Covered)/1000)) %>%
     ungroup()
 
-  Coverage_plot <- ggplot() +
-    #geom_point(data = Coverage1 %>% filter(Analysis == "Time stratified: 2 weeks"), aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 7, shape = 23) +
-    geom_point(data = Coverage1, #%>% filter(Analysis != "Time stratified: 2 weeks")
+  Coverage_plot <- ggplot() + 
+    geom_point(data = Coverage1, 
                aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 9, shape = 23) + #position=position_dodge(0.05),
     facet_grid(~Simulated_RR, switch = "x") +
     geom_hline(yintercept = .95, linetype = 2) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1, scale = 100), minor_breaks = seq(0 , 1, .05), breaks = seq(0, 1, .20), limits = c(0,1)) +
-    scale_x_continuous(breaks = NULL, limits = c(.5, 2.75)) + #.5, 4.5
+    scale_x_continuous(breaks = NULL, limits = c(.5, 2.75)) +
     theme_minimal(base_size = 22) +
     theme(legend.position = "none") +
     xlab("Simulated Relative Risk") +
@@ -575,34 +574,90 @@ Visualize_Results <- function(results_df){
   return(combined_plot)
 }
 
-Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
+Create_table_of_bias_results(CCO_simulation_2007)
+Create_table_of_bias_results(CCO_simulation_2018)
+Create_table_of_bias_results(CCO_simulation_2018_notInduced)
 
+Create_table_of_coverage_results(CCO_simulation_2007)
+Create_table_of_coverage_results(CCO_simulation_2018)
+Create_table_of_coverage_results(CCO_simulation_2018_notInduced)
+
+#calculate a signed percent bias of estimated from simulated
+Visualize_Percent_Bias <- function(results_df){ 
+  
+  Results_CaseCrossovers1 <- results_df %>%
+    filter(Simulated_RR != 1 & (Analysis=="CCO_2week" | Analysis=="CCO_Month")) %>%
+    group_by(Analysis, Simulated_RR) %>%
+    mutate(Round_of_Sim = row_number(),
+           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month"), 
+                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month"))) %>%
+    ungroup()
+  
+  Bias_Estimates <- Results_CaseCrossovers1 %>%
+    mutate(Bias_per_10F = ((estimate - log(Simulated_RR)/10)/(log(Simulated_RR)/10))*100)
+  
+  Bias_plot <- ggplot(Bias_Estimates) + 
+    geom_boxplot(aes(Simulated_RR, Bias_per_10F, fill = Analysis), width = .5) + 
+    facet_grid(~Simulated_RR, scales = "free", switch = "x") +
+    ylab("Bias") + 
+    theme_minimal(base_size = 22) +
+    scale_x_continuous(breaks = NULL) +
+    theme(legend.position = "bottom",
+          axis.title.x = element_blank(),
+          legend.title = element_blank())
+  
+  return(Bias_plot)
+}
+
+#look at the temperature and birth data - basis for all simulations
+Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){ 
+  
   year_of_analysis <- year(start_date)
-
+  
   Temp_plot <- Temp_df %>%
     filter(year(date)==year_of_analysis) %>%
-    ggplot() +
-    geom_line(aes(x = date, y = x), color = "blue") +
-    annotate("rect", fill = "orange", alpha = 0.25,
+    ggplot() + 
+    geom_line(aes(x = date, y = x), color = "blue") + 
+    annotate("rect", fill = "orange", alpha = 0.25, 
              xmin = as.Date(start_date), xmax = as.Date(end_date),
              ymin = -Inf, ymax = Inf)+
     theme_minimal() +
-    theme(axis.title.x = element_blank()) +
+    theme(axis.title.x = element_blank()) + 
     ylab("Maximum Temperature (F)")
-
+  
   Preterms_2018_plot <- Births_df %>%
     group_by(date) %>%
     summarise(`Preterm Births` = sum(Preterms)) %>%
     filter(year(date)==year_of_analysis) %>%
-    ggplot() +
-    geom_line(aes(x = date, y = `Preterm Births`)) +
-    annotate("rect", fill = "orange", alpha = 0.25,
+    ggplot() + 
+    geom_line(aes(x = date, y = `Preterm Births`)) + 
+    annotate("rect", fill = "orange", alpha = 0.25, 
              xmin = as.Date(start_date), xmax = as.Date(end_date),
-             ymin = -Inf, ymax = Inf) +
-    theme_minimal() +
+             ymin = -Inf, ymax = Inf) + 
+    theme_minimal() + 
     xlab("Date")
-
+  
   combined_plot <- ggarrange(Temp_plot, Preterms_2018_plot, ncol = 1, nrow = 2, labels = "AUTO")
-
+  
   return(combined_plot)
 }
+
+#Balance in control selection
+
+# Case_days_2018 <- Preterms_per_day_all %>%
+#   filter(date>="2018-05-01" & date < "2018-10-01") %>%
+#   uncount(Preterms) %>%
+#   mutate(Participant = row_number(),
+#          Case = 1) %>%
+#   select(date, Gest_Age, Participant, Case)
+# 
+# Balance_MonthStrat <- bind_rows(Case_days_2018, Month_stratification(Case_days_2018))
+# 
+# Balance_BiweeklyStrat <- bind_rows(Case_days_2018, Biweekly_stratification(Case_days_2018))
+# 
+# Balance_BiweeklyStrat %>%
+#   pivot_wider(id_cols = Participant, names_from = Case, values_from = date) %>%
+#   mutate(Before = if_else(`0`<`1`, 1, 0),
+#          After = if_else(`0`> `1`, 1, 0)) %>%
+#   summarise(Prop_before = sum(Before)/nrow(.),
+#             Prop_after = sum(After)/nrow(.))
