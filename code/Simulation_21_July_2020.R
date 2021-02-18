@@ -384,7 +384,7 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
 
 
 Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats, Temp_df){
-  plan(multiprocess, workers = 14)
+  plan(multisession)
   Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day_df, Temp_df)
 
   Bootstrapped_counts <- number_of_repeats %>%

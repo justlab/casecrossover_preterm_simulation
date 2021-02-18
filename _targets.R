@@ -1,6 +1,4 @@
 library(targets)
-library(future)
-plan(multisession)
 source("code/Simulation_21_July_2020.R")
 tar_option_set(
   packages = c(
@@ -13,9 +11,9 @@ tar_option_set(
     "splines",
     "furrr",
     "scales",
-    "ggpubr"
-  )#,
-  #error = "workspace"
+    "ggpubr",
+    "future"
+  )#, error = "workspace"
 )
 list(
   # INPUT DATA ####
