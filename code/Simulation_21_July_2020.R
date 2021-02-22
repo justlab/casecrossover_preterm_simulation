@@ -319,7 +319,6 @@ Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df){ ##
 
 Random_draws <- function(Parameters_df){ #make a function to repeat x times for monte carlo
   
-  set.seed(0)
   
   MonteCarlo_df <- Parameters_df %>%
     rowwise() %>% 
@@ -333,7 +332,7 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
   
   Simulated_RR <- Params_for_Simulated_Year$Simulated_RR[1]
   
-                                                    #get rid of filters when refunctionalized 
+                                                    
   CC_Exposures  <-  Params_for_Simulated_Year %>% #Change back to simulated year
     dplyr::select(date, x) %>%
     distinct(date, x)
@@ -402,7 +401,7 @@ plan(multisession(workers = 14)) #for parallelization
 
 Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats){
   
-  Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day)
+  Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day_df)
   
   Bootstrapped_counts <- number_of_repeats %>% 
     rerun(Random_draws(Parameters)) %>% 
@@ -422,7 +421,9 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
   
 }
 
+set.seed(1)
 CCO_simulation_2007 <- Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all, 1000)
+set.seed(0)
 CCO_simulation_2018 <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all, 1000)
 
 #### Analyze Results ####
@@ -434,7 +435,7 @@ Create_table_of_bias_results <- function(Simulation_results){
     ungroup()
   
   Bias_Estimates <- Results_CaseCrossovers %>%
-    mutate(Bias_per_10F = round((estimate*10) - log(Simulated_RR), 3),#exp((estimate*10)-log(Simulated_RR))
+    mutate(Bias_per_10F = round((estimate*10) - log(Simulated_RR), 3),
            Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_Month_GestAge", "CCO_Month_PropMth"), 
                              labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: Month,\nAdjustment: Gestational Age", 
                                         "Time Stratified: Month,\nAdjustment: Proportion of Month"))) 
@@ -448,7 +449,7 @@ Create_table_of_bias_results <- function(Simulation_results){
 
 Create_table_of_coverage_results <- function(Simulation_results){
   
-  Results_CaseCrossovers <- Simulation_results %>% 
+  Results_CaseCrossovers <-  Simulation_results %>% 
     group_by(Analysis, Simulated_RR) %>%
     mutate(Round_of_Sim = row_number()) %>%
     ungroup()
@@ -461,7 +462,7 @@ Create_table_of_coverage_results <- function(Simulation_results){
   
   Coverage1 <- Coverage %>%
     ungroup() %>%
-    mutate(Covered = if_else(Simulated_RR>=Exp_ConfLow & Simulated_RR<=Exp_ConfHigh, 1, 0)) %>%
+    mutate(Covered = if_else(Simulated_RR>=Exp_ConfLow & Simulated_RR<=Exp_ConfHigh, 1, 0)) #%>%
     group_by(Simulated_RR, Analysis) %>%
     summarise(Coverage = (sum(Covered)/1000)) %>%
     ungroup() %>%
