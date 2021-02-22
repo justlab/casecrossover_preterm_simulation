@@ -304,8 +304,7 @@ Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df, LaG
 
 Random_draws <- function(Parameters_df){ #make a function to repeat x times for monte carlo
 
-  set.seed(0)
-  
+
   MonteCarlo_df <- Parameters_df %>%
     rowwise() %>%
     mutate(Random_draw = rpois(1, lambda))
@@ -383,7 +382,8 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
 }
 
 
-Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats, Temp_df){
+Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats, Temp_df, target_seed){
+  set.seed(target_seed)
   plan(multisession)
   Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day_df, Temp_df)
 
