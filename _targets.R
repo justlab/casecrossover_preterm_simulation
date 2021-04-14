@@ -37,10 +37,10 @@ list(
 
   # SIMULATIONS ####
   tar_target(CCO_simulation_2007,
-             Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all,
+             Simulate_and_analyze_CCO(start_date = "2007-05-01", end_date = "2007-10-01", Preterms_per_day_all,
                                       1000, LaGuardiaTemp1, target_seed = 1)),
   tar_target(CCO_simulation_2018,
-              Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all,
+              Simulate_and_analyze_CCO(start_date = "2018-05-01", end_date = "2018-10-01", Preterms_per_day_all,
                                        1000, LaGuardiaTemp1, target_seed = 0)),
 
   # TABLES AND PLOTS ####
