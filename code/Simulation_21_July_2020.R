@@ -402,7 +402,7 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
   
   message("Split, starting future_map_dfr...")
   Results_CaseCrossovers <- split_counts %>%
-    future_map_dfr(., ~Case_Crossovers(.x), .progress = T)
+    future_map_dfr(., ~Case_Crossovers(.x), .progress = T, .options = furrr_options(seed = target_seed))
 
   return(Results_CaseCrossovers)
 
