@@ -429,7 +429,7 @@ Create_table_of_bias_results <- function(Simulation_results){
   return(Bias_Estimates1)
 }
 
-Create_table_of_coverage_results <- function(Simulation_results){
+Create_table_of_coverage_results <- function(Simulation_results, number_of_repeats){
 
   Results_CaseCrossovers <- Simulation_results %>%
     group_by(Analysis, Simulated_RR) %>%
@@ -446,7 +446,7 @@ Create_table_of_coverage_results <- function(Simulation_results){
     ungroup() %>%
     mutate(Covered = if_else(Simulated_RR>=Exp_ConfLow & Simulated_RR<=Exp_ConfHigh, 1, 0)) %>%
     group_by(Simulated_RR, Analysis) %>%
-    summarise(Coverage = (sum(Covered)/1000)) %>%
+    summarise(Coverage = (sum(Covered)/number_of_repeats)) %>%
     ungroup() %>%
     mutate(Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_Month_GestAge", "CCO_Month_PropMth"),
                              labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: Month,\nAdjustment: Gestational Age",
@@ -461,7 +461,7 @@ Create_table_of_coverage_results <- function(Simulation_results){
 }
 
 
-Visualize_Results <- function(results_df){
+Visualize_Results <- function(results_df, number_of_repeats){
 
   Results_CaseCrossovers1 <- results_df %>%
     filter(Analysis=="CCO_2week" | Analysis=="CCO_Month") %>%
@@ -495,7 +495,7 @@ Visualize_Results <- function(results_df){
     ungroup() %>%
     mutate(Covered = if_else(Simulated_RR>=Exp_ConfLow & Simulated_RR<=Exp_ConfHigh, 1, 0)) %>%
     group_by(Simulated_RR, Analysis) %>%
-    summarise(Coverage = (sum(Covered)/1000)) %>%
+    summarise(Coverage = (sum(Covered)/number_of_repeats)) %>%
     ungroup()
 
   Coverage_plot <- ggplot() + 
