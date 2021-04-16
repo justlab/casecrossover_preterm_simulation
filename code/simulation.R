@@ -338,7 +338,7 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
                              method = "efron", # the method tells the model how to deal with ties
                              Simulation_df_MonthStrat)
 
-  CCOResults_monthstrat <- broom::tidy(mod.clogit.month) %>%
+  CCOResults_monthstrat <- broom::tidy(mod.clogit.month, conf.int = TRUE) %>%
     mutate(Analysis = "CCO_Month") %>%
     bind_cols(., tibble(Simulated_RR = Simulated_RR))
 
@@ -347,7 +347,7 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
                              method = "efron",
                              Simulation_df_MonthStrat)
 
-  CCOResults_monthstrat_propmth <- broom::tidy(mod.clogit.month.prop) %>%
+  CCOResults_monthstrat_propmth <- broom::tidy(mod.clogit.month.prop, conf.int = TRUE) %>%
     filter(term == "x") %>%
     mutate(Analysis = "CCO_Month_PropMth") %>%
     bind_cols(., tibble(Simulated_RR = Simulated_RR))
@@ -357,7 +357,7 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
                                   method = "efron",
                                   Simulation_df_MonthStrat)
 
-  CCOResults_monthstrat_gestage <- broom::tidy(mod.clogit.month.gestage) %>%
+  CCOResults_monthstrat_gestage <- broom::tidy(mod.clogit.month.gestage, conf.int = TRUE) %>%
     filter(term == "x") %>%
     mutate(Analysis = "CCO_Month_GestAge") %>%
     bind_cols(., tibble(Simulated_RR = Simulated_RR))
@@ -371,7 +371,7 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
                            method = "efron", # the method tells the model how to deal with ties
                            Simulation_df_2WeekStrat)
 
-  CCOResults_biweekstrat <- broom::tidy(mod.clogit.2wk) %>%
+  CCOResults_biweekstrat <- broom::tidy(mod.clogit.2wk, conf.int = TRUE) %>%
     mutate(Analysis = "CCO_2week") %>%
     bind_cols(., tibble(Simulated_RR = Simulated_RR))
 
