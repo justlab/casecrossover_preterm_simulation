@@ -1,5 +1,5 @@
 library(targets)
-source("code/Simulation_21_July_2020.R")
+source("code/simulation.R")
 
 options(mc.cores = 3) # change to suit system core count and available memory; see readme
 
@@ -25,7 +25,7 @@ list(
   tar_target(NYBirths_by_Month_plural_file, "data/Plurality_by_MonthYear_CDCWONDER.txt", format = "file"),
   tar_target(NYBirths_by_Month_single_file, "data/Births_NYS_YrMonth_SingletonGestAge.txt", format = "file"),
   tar_target(Annual_Singleton_Births_file, "data/Annual_Singleton_NYS.txt", format = "file"),
-  tar_target(LaGuardiaTemp_file ,"data/CentralParkTemp_2007to2018.csv", format = "file"), #Actually Laguardia!
+  tar_target(LaGuardiaTemp_file ,"data/LGATemp_2007to2018.csv", format = "file"), 
 
   # DATA PREPARATION ####
   tar_target(LaGuardiaTemp1, load_temp(LaGuardiaTemp_file)),
