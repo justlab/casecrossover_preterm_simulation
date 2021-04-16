@@ -1,5 +1,8 @@
 library(targets)
 source("code/Simulation_21_July_2020.R")
+
+options(mc.cores = 3) # change to suit system core count and available memory; see readme
+
 tar_option_set(
   packages = c(
     "tidyverse",
@@ -36,7 +39,7 @@ list(
                                           Annual_Singleton_Births_file)),
 
   # SIMULATIONS ####
-  tar_target(repeats, 1000), # 1000 in publication, shorter for quick demonstration
+  tar_target(repeats, 10), # 1000 in publication, shorter for quick demonstration
   tar_target(CCO_simulation_2007,
              Simulate_and_analyze_CCO(start_date = "2007-05-01", end_date = "2007-10-01", Preterms_per_day_all,
                                       number_of_repeats = repeats, LaGuardiaTemp1, target_seed = 1)),
