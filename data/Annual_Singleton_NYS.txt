@@ -1,0 +1,36 @@
+"Notes"	"Year"	"Year Code"	Births
+	"2007"	"2007"	243373
+	"2008"	"2008"	240719
+	"2009"	"2009"	238063
+	"2010"	"2010"	234756
+	"2011"	"2011"	231790
+	"2012"	"2012"	231560
+	"2013"	"2013"	227501
+	"2014"	"2014"	229570
+	"2015"	"2015"	228485
+	"2016"	"2016"	225522
+	"2017"	"2017"	221332
+	"2018"	"2018"	218244
+"Total"			2770915
+"---"
+"Dataset: Natality, 2007-2018"
+"Query Parameters:"
+"Plurality or Multiple Birth: Single"
+"States: New York (36)"
+"Group By: Year"
+"Show Totals: True"
+"Show Zero Values: False"
+"Show Suppressed: True"
+"Calculate Rates Per: 1,000"
+"Population Option: No populations shown because rates were not selected."
+"---"
+"Help: See http://wonder.cdc.gov/wonder/help/Natality.html for more information."
+"---"
+"Query Date: Jul 22, 2020 10:42:06 AM"
+"---"
+"Suggested Citation: United States Department of Health and Human Services (US DHHS), Centers for Disease Control and Prevention"
+"(CDC), National Center for Health Statistics (NCHS), Division of Vital Statistics, Natality public-use data 2007-2018, on CDC"
+"WONDER Online Database, September 2019. Accessed at http://wonder.cdc.gov/natality-current.html on Jul 22, 2020 10:42:06 AM"
+"---"
+Caveats:
+"1. Each birth record represents one living baby."
