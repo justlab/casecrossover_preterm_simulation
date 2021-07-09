@@ -4,7 +4,6 @@ library(lubridate)
 library(survival)
 library(broom)
 library(zoo)
-library(splines)
 # library(devtools)
 # devtools::install_github("DavisVaughan/furrr")
 library(furrr)
@@ -24,7 +23,6 @@ LaGuardiaTemp <- read_csv(here::here("data", "LaGuardiaTemp_2007to2018.csv"))
 
 
 #### Functions used throughout ####
-
 
 coalesce_join <- function(x, y, 
                           by = NULL, suffix = c(".x", ".y"), 
@@ -82,55 +80,101 @@ Biweekly_stratification <- function(Hazard_Periods){ #time stratified approach f
   return(Control_Periods)
 }
 
+#input will have: date, Participant, Case, Gest_Age
+
+# test_data <- Random_draws(Create_Parameters_for(start = "2018-05-01", end_date = "2018-10-01", Preterms_per_day_all)) %>% filter(Random_draw!=0)%>%
+#   uncount(Random_draw) %>%
+#   mutate(Participant = row_number(), 
+#          Case = 1) %>%
+#   dplyr::select(date, Participant, Case, Gest_Age) 
+
 Month_stratification <- function(Hazard_Periods){ 
   
-  Control_Periods <- Hazard_Periods %>%
-    mutate(Month = month(date),
-           FirstDay = floor_date(date, unit = "months"),
-           Weeks = as.integer(ceiling(difftime(date, FirstDay, units = "weeks"))),
-           Ctrldate1 = if_else(Weeks<=1, date+days(7),
-                               if_else(Weeks==2, date-days(7),
-                                       if_else(Weeks==3, date-days(14), date-days(21)))),
-           Ctrldate2 = if_else(Weeks<=1, date+days(14),
-                               if_else(Weeks==2, date+days(7),
-                                       if_else(Weeks==3, date-days(7), date-days(14)))),
-           Ctrldate3 = if_else(Weeks<=1, date+days(21),
-                               if_else(Weeks==2, date+days(14),
-                                       if_else(Weeks==3, date+days(7), date-days(7))))) %>%
-    ungroup()
+  Hazard_Periods1 <- Hazard_Periods %>% #Hazard_Periods 
+    mutate(month = month(date),
+           wkday = wday(date),
+           year = year(date))
   
-  Gest_Ages <- Control_Periods %>%
-    mutate(GestAge_Ctrldate1 = as.numeric(difftime(Ctrldate1, date, units = "weeks")+ Gest_Age),
-           GestAge_Ctrldate2 = as.numeric(difftime(Ctrldate2, date, units = "weeks")+ Gest_Age),
-           GestAge_Ctrldate3 = as.numeric(difftime(Ctrldate3, date, units = "weeks")+ Gest_Age)) 
+  Month_stratified_matches <- tibble(date = seq.Date(from = min(Hazard_Periods$date), to = max(Hazard_Periods$date), by = 1)) %>%
+    mutate(wkday = wday(date),
+           month = month(date),
+           year = year(date),
+           wk_of_month = ceiling(day(date)/7)) %>%
+    pivot_wider(names_from = wk_of_month, values_from = date)
   
-  Gest_Ages1 <- Gest_Ages %>%
-    dplyr::select(Participant, Ctrldate1, GestAge_Ctrldate1) %>%
-    rename(date = "Ctrldate1",
-           Gest_Age = GestAge_Ctrldate1)
+  Control_Periods <- Hazard_Periods1 %>%
+    left_join(., Month_stratified_matches, by = c("month", "wkday", "year")) %>%
+    mutate_at(vars(`1`:`5`), ~ as.Date(ifelse(`.`==date, NA, `.`))) %>%
+    mutate(gestage_1 = as.numeric(difftime(`1`, date, units = "weeks") + Gest_Age),
+           gestage_2 = as.numeric(difftime(`2`, date, units = "weeks") + Gest_Age),
+           gestage_3 = as.numeric(difftime(`3`, date, units = "weeks") + Gest_Age),
+           gestage_4 = as.numeric(difftime(`4`, date, units = "weeks") + Gest_Age),
+           gestage_5 = as.numeric(difftime(`5`, date, units = "weeks") + Gest_Age))
   
-  Gest_Ages2 <- Gest_Ages %>%
-    dplyr::select(Participant, Ctrldate2, GestAge_Ctrldate2) %>%
-    rename(date = "Ctrldate2",
-           Gest_Age = "GestAge_Ctrldate2")
+  Control_Periods_a <- Control_Periods %>% 
+    dplyr::select(Participant, `1`:`5`) %>%
+    pivot_longer(-Participant, names_to = "week_of_month", values_to = "date")
   
-  Gest_Ages3 <- Gest_Ages %>%
-    dplyr::select(Participant, Ctrldate3, GestAge_Ctrldate3) %>%
-    rename(date = "Ctrldate3",
-           Gest_Age = "GestAge_Ctrldate3") %>%
-    bind_rows(., Gest_Ages1, Gest_Ages2)
+  Control_Periods_b <- Control_Periods %>%
+    dplyr::select(Participant, gestage_1:gestage_5) %>%
+    pivot_longer(-Participant, names_to = "week_of_month", values_to = "Gest_Age") %>%
+    mutate(week_of_month = str_sub(week_of_month, -1))
   
-  Control_Periods1 <- Control_Periods %>%
-    dplyr::select(Participant, Ctrldate1, Ctrldate2, Ctrldate3) %>%
-    group_by(Participant) %>%
-    gather("Control_day", "date", Ctrldate1:Ctrldate3) %>% 
+  Control_Periods1 <- Control_Periods_a %>%
+    left_join(., Control_Periods_b, by = c("Participant", "week_of_month")) %>%
     mutate(Case = 0) %>%
-    dplyr::select(-Control_day) %>%
-    left_join(., Gest_Ages3, by = c("Participant", "date"))
+    filter(!is.na(date)) %>%
+    dplyr::select(-week_of_month)
   
   return(Control_Periods1)
 }
 
+FourWk_aka28day_stratification <- function(Hazard_Periods){ #time stratified approach for 28 day periods for warm months
+
+    first_year_in_analysis <- min(year(Hazard_Periods$date))
+    last_year_in_analysis <- max(year(Hazard_Periods$date))
+    
+    all_years <- seq.int(first_year_in_analysis, last_year_in_analysis, by = 1)# years_in_analysis
+    
+    All_Warm_Month_Dates <- tibble()
+    for (i in 1:length(all_years)) {
+      year <- all_years[i] #consider also using April and/or trimming out September
+      Warm_Month_Dates_in_Year <- tibble(date = seq.Date(from = as.Date(paste0(year, "-5-1")), to = as.Date(paste0(year, "-9-30")), by = "day"))
+      All_Warm_Month_Dates <- bind_rows(All_Warm_Month_Dates, Warm_Month_Dates_in_Year)
+    }
+    rm(Warm_Month_Dates_in_Year, year)
+    
+    Date_control_match <- All_Warm_Month_Dates %>%
+      group_by(year(date)) %>%
+      mutate(Day = row_number(date),
+             WkDay = wday(date),
+             Strata = ceiling(Day/28)) %>%
+      group_by(Strata, WkDay, .add = T) %>%
+      mutate(Sequence = row_number(),
+             ctrldate1 = if_else(Sequence == 1, date+days(7),
+                                 if_else(Sequence==2, date-days(7),
+                                         if_else(Sequence==3, date-days(14), date-days(21)))),
+             ctrldate2 = if_else(Sequence==1, date+days(14),
+                                 if_else(Sequence==2, date+days(7),
+                                         if_else(Sequence==3, date-days(7), date-days(14)))),
+             ctrldate3 = if_else(Sequence==1, date+days(21),
+                                 if_else(Sequence==2, date+days(14),
+                                         if_else(Sequence==3, date+days(7), date-days(7))))) %>%
+      rename("hazard_period" = "date") %>%
+      ungroup() %>%
+      dplyr::select(hazard_period, ctrldate1, ctrldate2, ctrldate3)
+    
+    Control_periods <- Hazard_Periods %>% 
+      left_join(., Date_control_match, by = c("date" = "hazard_period")) %>%
+      dplyr::select(Participant, ctrldate1:ctrldate3) %>%
+      pivot_longer(-Participant, values_to = "date") %>%
+      dplyr::select(-name) %>%
+      mutate(Case = 0)
+    
+    return(Control_periods)
+  }
+
+  
 getSeason <- function(input.date){
   numeric.date <- 100*month(input.date)+day(input.date)
   ## input Seasons upper limits in the form MMDD in the "break =" option:
@@ -300,7 +344,7 @@ Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df){ ##
     mutate(lnRR_per_degreeF = log(RR_per_10F)/10)
   
   Preterms_per_day_indexYear <- Preterms_per_day_df %>%
-    filter(date >= start_date & date < end_date) 
+    filter(date >= start_date & date <= end_date) #was filter(date >= start_date & date < end_date) 
   
   Beta_naughts <- Preterms_per_day_indexYear %>%
     group_by(Gest_Age, Month_number) %>%
@@ -318,13 +362,43 @@ Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df){ ##
 }
 
 Random_draws <- function(Parameters_df){ #make a function to repeat x times for monte carlo
-  
-  
+
+
   MonteCarlo_df <- Parameters_df %>%
-    rowwise() %>% 
-    mutate(Random_draw = rpois(1, lambda)) 
-  
+    rowwise() %>%
+    mutate(Random_draw = rpois(1, lambda))
+
   return(MonteCarlo_df)
+}
+
+
+get_end_date <- function(df_with_casedays, control_select = c("28_day", "month", "2_week")) {
+  
+  start_date <- min(df_with_casedays$date)
+  last_date <- max(df_with_casedays$date)
+  
+  max_num_days <- as.numeric(difftime(as.Date(last_date),as.Date(start_date), "day"))+1
+  
+  if(control_select == "2_week") {
+    
+    end_date <- as.Date(start_date) + days(14*floor((max_num_days/14))-1)
+    
+  }
+  
+  if(control_select == "28_day") {
+    
+    end_date <- as.Date(start_date) + days(28*floor((max_num_days/28))-1)
+    
+  }
+  
+  if(control_select=="month") {
+    
+    elapsed_months <- 12 * (year(as.Date(last_date)) - year(as.Date(start_date))) + (month(as.Date(last_date)) - month(as.Date(start_date)))
+    end_date <- as.Date(start_date) + months(elapsed_months)-days(1)
+    
+  }
+  
+  return(end_date)
 }
 
 
@@ -332,72 +406,134 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
   
   Simulated_RR <- Params_for_Simulated_Year$Simulated_RR[1]
   
-                                                    
-  CC_Exposures  <-  Params_for_Simulated_Year %>% #Change back to simulated year
+  CC_Exposures  <- Params_for_Simulated_Year %>% #make this swap in
     dplyr::select(date, x) %>%
     distinct(date, x)
   
   CC_casedays <- Params_for_Simulated_Year %>% filter(Random_draw!=0)%>%
     uncount(Random_draw) %>%
-    mutate(Participant = row_number(), 
+    mutate(Participant = row_number(),
            Case = 1) %>%
-    dplyr::select(date, Participant, Case, Gest_Age) 
+    dplyr::select(date, Participant, Case, Gest_Age)
   
   #Month Stratified Case Crossover dataset
-  Simulation_df_MonthStrat <- bind_rows(CC_casedays, Month_stratification(CC_casedays)) %>% 
-    left_join(., CC_Exposures, by = "date") %>%
-    mutate(Prop_Month = (day(date)-1)/days_in_month(date)) 
+  Simulation_df_MonthStrat <- CC_casedays %>%
+    filter(date <= get_end_date(CC_casedays, "month")) %>%
+    bind_rows(., Month_stratification(.)) %>% 
+    left_join(., CC_Exposures, by = "date") 
+  
   
   #clogit regression - no adjustment
   mod.clogit.month <- clogit(Case ~ x + strata(Participant), # each case day is a strata #number of events in each day
                              method = "efron", # the method tells the model how to deal with ties
                              Simulation_df_MonthStrat) 
   
-  CCOResults_monthstrat <- broom::tidy(mod.clogit.month) %>%
+  CCOResults_monthstrat <- broom::tidy(mod.clogit.month, conf.int = TRUE) %>%
     mutate(Analysis = "CCO_Month") %>%
-    bind_cols(., tibble(Simulated_RR = Simulated_RR))
+    add_column(Simulated_RR = Simulated_RR)
   
-  #regression - proportion of month adjustment 
-  mod.clogit.month.prop <- clogit(Case ~ x + Prop_Month + strata(Participant), 
-                             method = "efron", 
-                             Simulation_df_MonthStrat) 
+  ### 28day stratified model ### 
+  Simulation_df_28dayStrat <- CC_casedays %>%
+    filter(date <= get_end_date(CC_casedays, "28_day")) %>%
+    bind_rows(., FourWk_aka28day_stratification(.)) %>% 
+    left_join(., CC_Exposures, by = "date") 
   
-  CCOResults_monthstrat_propmth <- broom::tidy(mod.clogit.month.prop) %>%
+  mod.clogit.fourwk <- clogit(Case ~ x + strata(Participant), 
+                              method = "efron", 
+                              Simulation_df_28dayStrat) 
+  
+  CCOResults_28daystrat <- broom::tidy(mod.clogit.fourwk, conf.int = TRUE) %>%
     filter(term == "x") %>%
-    mutate(Analysis = "CCO_Month_PropMth") %>%
-    bind_cols(., tibble(Simulated_RR = Simulated_RR))
-  
-  #regression - adjustment for Gestational Age 
-  mod.clogit.month.gestage <- clogit(Case ~ x + Gest_Age + strata(Participant), 
-                                  method = "efron", 
-                                  Simulation_df_MonthStrat) 
-  
-  CCOResults_monthstrat_gestage <- broom::tidy(mod.clogit.month.gestage) %>%
-    filter(term == "x") %>%
-    mutate(Analysis = "CCO_Month_GestAge") %>%
-    bind_cols(., tibble(Simulated_RR = Simulated_RR))
+    mutate(Analysis = "CCO_28day") %>%
+    add_column(Simulated_RR = Simulated_RR)
   
   ### 2 week stratified case crossover ###
+  Simulation_df_2WeekStrat <- CC_casedays %>%
+    filter(date <= get_end_date(CC_casedays, "2_week")) %>%
+    bind_rows(., Biweekly_stratification(.)) %>% 
+    left_join(., CC_Exposures, by = "date") 
   
-  Simulation_df_2WeekStrat <- bind_rows(CC_casedays, Biweekly_stratification(CC_casedays))%>% 
-    left_join(., CC_Exposures, by = "date")
+  # bind_rows(CC_casedays, Biweekly_stratification(CC_casedays))%>% 
+  # left_join(., CC_Exposures, by = "date") %>%
+  # filter(date <= get_end_date(CC_casedays, "2_week")
   
   mod.clogit.2wk <- clogit(Case ~ x + strata(Participant), # each case day is a strata #number of events in each day
                            method = "efron", # the method tells the model how to deal with ties
                            Simulation_df_2WeekStrat) 
   
-  CCOResults_biweekstrat <- broom::tidy(mod.clogit.2wk) %>%
+  CCOResults_biweekstrat <- broom::tidy(mod.clogit.2wk, conf.int = TRUE) %>%
     mutate(Analysis = "CCO_2week") %>%
-    bind_cols(., tibble(Simulated_RR = Simulated_RR))
+    add_column(Simulated_RR = Simulated_RR)
   
-  RegressionResults <- bind_rows(CCOResults_monthstrat, CCOResults_monthstrat_propmth, CCOResults_biweekstrat, CCOResults_monthstrat_gestage) 
+  RegressionResults <- bind_rows(CCOResults_monthstrat, CCOResults_28daystrat, CCOResults_biweekstrat) 
   
   return(RegressionResults)
   
 }
 
+# Case_Crossovers <- function(Params_for_Simulated_Year){ 
+#   
+#   Simulated_RR <- Params_for_Simulated_Year$Simulated_RR[1]
+#   
+#   CC_Exposures  <-  Params_for_Simulated_Year %>% #Change back to simulated year
+#     dplyr::select(date, x) %>%
+#     distinct(date, x)
+#   
+#   CC_casedays <- Params_for_Simulated_Year %>% filter(Random_draw!=0)%>%
+#     uncount(Random_draw) %>%
+#     mutate(Participant = row_number(), 
+#            Case = 1) %>%
+#     dplyr::select(date, Participant, Case, Gest_Age) 
+#   
+#   #Month Stratified Case Crossover dataset
+#   Simulation_df_MonthStrat <- bind_rows(CC_casedays, Month_stratification(CC_casedays)) %>% 
+#     left_join(., CC_Exposures, by = "date") #%>%
+#     #mutate(Prop_Month = (day(date)-1)/days_in_month(date)) 
+#   
+#   #clogit regression - no adjustment
+#   mod.clogit.month <- clogit(Case ~ x + strata(Participant), # each case day is a strata #number of events in each day
+#                              method = "efron", # the method tells the model how to deal with ties
+#                              Simulation_df_MonthStrat) 
+#   
+#   CCOResults_monthstrat <- broom::tidy(mod.clogit.month, conf.int = TRUE) %>%
+#     mutate(Analysis = "CCO_Month") %>%
+#     bind_cols(., tibble(Simulated_RR = Simulated_RR))
+#   
+#   ### 28day stratified model ### 
+#   Simulation_df_28dayStrat <- bind_rows(CC_casedays, FourWk_aka28day_stratification(CC_casedays)) %>% 
+#     left_join(., CC_Exposures, by = "date")
+#   
+#   mod.clogit.fourwk <- clogit(Case ~ x + strata(Participant), 
+#                              method = "efron", 
+#                              Simulation_df_28dayStrat) 
+#   
+#   CCOResults_28daystrat <- broom::tidy(mod.clogit.fourwk, conf.int = TRUE) %>%
+#     filter(term == "x") %>%
+#     mutate(Analysis = "CCO_28day") %>%
+#     bind_cols(., tibble(Simulated_RR = Simulated_RR))
+#   
+# 
+#   ### 2 week stratified case crossover ###
+#   
+#   Simulation_df_2WeekStrat <- bind_rows(CC_casedays, Biweekly_stratification(CC_casedays))%>% 
+#     left_join(., CC_Exposures, by = "date")
+#   
+#   mod.clogit.2wk <- clogit(Case ~ x + strata(Participant), # each case day is a strata #number of events in each day
+#                            method = "efron", # the method tells the model how to deal with ties
+#                            Simulation_df_2WeekStrat) 
+#   
+#   CCOResults_biweekstrat <- broom::tidy(mod.clogit.2wk, conf.int = TRUE) %>%
+#     mutate(Analysis = "CCO_2week") %>%
+#     bind_cols(., tibble(Simulated_RR = Simulated_RR))
+#   
+#   RegressionResults <- bind_rows(CCOResults_monthstrat, CCOResults_28daystrat, CCOResults_biweekstrat) 
+#   
+#   return(RegressionResults)
+#   
+# }
+
 #create parameters for 2007 and 2018
-plan(multisession(workers = 14)) #for parallelization
+plan(multisession(workers = 8)) #for parallelization
 
 Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats){
   
@@ -423,6 +559,7 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
 
 set.seed(1)
 CCO_simulation_2007 <- Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all, 1000)
+
 set.seed(0)
 CCO_simulation_2018 <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all, 1000)
 
@@ -436,9 +573,8 @@ Create_table_of_bias_results <- function(Simulation_results){
   
   Bias_Estimates <- Results_CaseCrossovers %>%
     mutate(Bias_per_10F = round((estimate*10) - log(Simulated_RR), 3),
-           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_Month_GestAge", "CCO_Month_PropMth"), 
-                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: Month,\nAdjustment: Gestational Age", 
-                                        "Time Stratified: Month,\nAdjustment: Proportion of Month"))) 
+           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_28day"), 
+                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: 28 days"))) 
   Bias_Estimates1 <- Bias_Estimates %>% 
     group_by(Analysis) %>%
     summarise(bias_median = median(Bias_per_10F),
@@ -448,7 +584,7 @@ Create_table_of_bias_results <- function(Simulation_results){
 }
 
 Create_table_of_coverage_results <- function(Simulation_results){
-  
+
   Results_CaseCrossovers <-  Simulation_results %>% 
     group_by(Analysis, Simulated_RR) %>%
     mutate(Round_of_Sim = row_number()) %>%
@@ -462,13 +598,12 @@ Create_table_of_coverage_results <- function(Simulation_results){
   
   Coverage1 <- Coverage %>%
     ungroup() %>%
-    mutate(Covered = if_else(Simulated_RR>=Exp_ConfLow & Simulated_RR<=Exp_ConfHigh, 1, 0)) #%>%
+    mutate(Covered = if_else(Simulated_RR>=Exp_ConfLow & Simulated_RR<=Exp_ConfHigh, 1, 0)) %>%
     group_by(Simulated_RR, Analysis) %>%
     summarise(Coverage = (sum(Covered)/1000)) %>%
     ungroup() %>%
-    mutate(Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_Month_GestAge", "CCO_Month_PropMth"), 
-                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: Month,\nAdjustment: Gestational Age", 
-                                        "Time Stratified: Month,\nAdjustment: Proportion of Month")))
+    mutate(Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_28day"), 
+                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: 28 days")))
   
   Coverage2 <- Coverage1 %>%
     group_by(Analysis) %>%
@@ -482,11 +617,11 @@ Create_table_of_coverage_results <- function(Simulation_results){
 Visualize_Results <- function(results_df){
   
   Results_CaseCrossovers1 <- results_df %>%
-    filter(Analysis=="CCO_2week" | Analysis=="CCO_Month") %>%
+    #filter(Analysis=="CCO_2week" | Analysis=="CCO_Month") %>%
     group_by(Analysis, Simulated_RR) %>%
     mutate(Round_of_Sim = row_number(),
-           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month"), 
-                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month"))) %>%
+           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_28day", "CCO_Month"), 
+                             labels = c("Time stratified: 2 weeks", "Time Stratified: 28 days", "Time Stratified: Month"))) %>%
     ungroup()
   
   Bias_Estimates <- Results_CaseCrossovers1 %>%
@@ -522,7 +657,7 @@ Visualize_Results <- function(results_df){
     facet_grid(~Simulated_RR, switch = "x") + 
     geom_hline(yintercept = .95, linetype = 2) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1, scale = 100), minor_breaks = seq(0 , 1, .05), breaks = seq(0, 1, .20), limits = c(0,1)) +
-    scale_x_continuous(breaks = NULL, limits = c(.5, 2.75)) +
+    scale_x_continuous(breaks = NULL, limits = c(.5, 3.5)) +
     theme_minimal(base_size = 22) +
     theme(legend.position = "none") +
     xlab("Simulated Relative Risk") +
@@ -610,4 +745,56 @@ Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2007-05-01", "2
 Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2018-05-01", "2018-10-01")
 
 
+
+NotSo_Month_stratification <- function(Hazard_Periods){
+    
+    Control_Periods <- Hazard_Periods %>%
+      mutate(Month = month(date),
+             FirstDay = floor_date(date, unit = "months"),
+             Weeks = as.integer(ceiling(difftime(date, FirstDay, units = "weeks"))),
+             Ctrldate1 = if_else(Weeks<=1, date+days(7),
+                                 if_else(Weeks==2, date-days(7),
+                                         if_else(Weeks==3, date-days(14), date-days(21)))),
+             Ctrldate2 = if_else(Weeks<=1, date+days(14),
+                                 if_else(Weeks==2, date+days(7),
+                                         if_else(Weeks==3, date-days(7), date-days(14)))),
+             Ctrldate3 = if_else(Weeks<=1, date+days(21),
+                                 if_else(Weeks==2, date+days(14),
+                                         if_else(Weeks==3, date+days(7), date-days(7))))) %>%
+      ungroup()
+    
+    Gest_Ages <- Control_Periods %>%
+      mutate(GestAge_Ctrldate1 = as.numeric(difftime(Ctrldate1, date, units = "weeks")+ Gest_Age),
+             GestAge_Ctrldate2 = as.numeric(difftime(Ctrldate2, date, units = "weeks")+ Gest_Age),
+             GestAge_Ctrldate3 = as.numeric(difftime(Ctrldate3, date, units = "weeks")+ Gest_Age)) 
+    
+    Gest_Ages1 <- Gest_Ages %>%
+      dplyr::select(Participant, Ctrldate1, GestAge_Ctrldate1) %>%
+      rename(date = "Ctrldate1",
+             Gest_Age = GestAge_Ctrldate1)
+    
+    Gest_Ages2 <- Gest_Ages %>%
+      dplyr::select(Participant, Ctrldate2, GestAge_Ctrldate2) %>%
+      rename(date = "Ctrldate2",
+             Gest_Age = "GestAge_Ctrldate2")
+    
+    Gest_Ages3 <- Gest_Ages %>%
+      dplyr::select(Participant, Ctrldate3, GestAge_Ctrldate3) %>%
+      rename(date = "Ctrldate3",
+             Gest_Age = "GestAge_Ctrldate3") %>%
+      bind_rows(., Gest_Ages1, Gest_Ages2)
+    
+    Control_Periods1 <- Control_Periods %>%
+      dplyr::select(Participant, Ctrldate1, Ctrldate2, Ctrldate3) %>%
+      group_by(Participant) %>%
+      gather("Control_day", "date", Ctrldate1:Ctrldate3) %>% 
+      mutate(Case = 0) %>%
+      dplyr::select(-Control_day) %>%
+      left_join(., Gest_Ages3, by = c("Participant", "date"))
+    
+    return(Control_Periods1)
+  }
+
+View(bind_rows(test_data, NotSo_Month_stratification(test_data)) %>%
+       arrange(Participant, Gest_Age))
   
