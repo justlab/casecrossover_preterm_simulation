@@ -10,10 +10,9 @@ library(splines)
 library(furrr)
 
 #Datasets#
-# Births_GestWeek_LMP <- read_tsv(here::here("data", "Births_byWeek_LMP_NYS_2018.txt"))
-# Births_GestWeek_OE <- read_tsv(here::here("data", "Births_byWeek_OE_NYS_2018.txt"))
+Births_GestWeek_LMP <- read_tsv(here::here("data", "Births_byWeek_LMP_NYS_2018.txt"))
+Births_GestWeek_OE <- read_tsv(here::here("data", "Births_byWeek_OE_NYS_2018.txt"))
 Births_GestAge_LMP <- read_tsv(here::here("data", "Yr_Month_GestAge_Plurality_NYS_2007to18.txt"))
-Births_WklyGestAge_07to18 <- read_tsv(here::here("data", "Births_GestationalWeek_NY_2007to2018.txt"))
 # NYBirths_by_Month <- read_tsv(here::here("Data", "AllBirthsNY_byMonth_CDCWonder.txt"))
 NYBirths_by_Weekday <- read_tsv(here::here("data", "Day_of_Wk_Natality_NY_2007to18.txt"))
 NYBirths_by_Month_plural <- read_tsv(here::here("data", "Plurality_by_MonthYear_CDCWONDER.txt"))
@@ -80,7 +79,7 @@ Month_stratification <- function(Hazard_Periods){ #this is based on a time strat
 
 Biweekly_stratification <- function(Hazard_Periods){ #right now only for 2018
   
-  Year <- as.character(year(Hazard_Periods$date)[1]) #pick out 1 observation to get year
+  Year <- "2018" #figure out how to get this
   Dates_in_Year <- seq.Date(from = as.Date(paste0(Year, "-1-1")), to = as.Date(paste0(Year, "-12-31")), by = "day")
   Date_control_match <- tibble(date = Dates_in_Year) %>%
     mutate(Week = week(date),
@@ -101,7 +100,7 @@ Biweekly_stratification <- function(Hazard_Periods){ #right now only for 2018
   #left_join(., CC_Exposures, by = c("Control_Period"="date")) %>% ###update this to not pull in the exposure cuz that happens below
   #dplyr::select(Hazard_period, Control_Period)
   
-  Control_Periods <- Hazard_Periods %>% 
+  Control_Periods <- Hazard_Periods %>% #Hazard_Periods %>%
     ungroup() %>%
     left_join(., Date_control_match1, by = c("date" = "Hazard_period")) %>%
     #dplyr::select(date, Participant, Round_of_Sim, Simulated_RR) %>%
@@ -134,7 +133,7 @@ ggplot(CentralParkTemp1, aes(x = date, y = x)) + geom_point() + geom_smooth(meth
   labs(title = "Observed max temperatures at LaGuardia Airport") +
   ylab("Max temperature (F)") + 
   theme(text = element_text(size = 15))
-
+# 
 # #let's model based on the max temp for now
 # MeanTemp_CentralPark <- round(mean(CentralParkTemp$TMAX), 2)
 # StdDevTemp_CentralPark <- round(mean(loess.sd(CentralParkTemp$TMAX)$sd), 2) #or do I want the sd for the entire year??
@@ -343,7 +342,7 @@ Births_GestAge_LMP3 <- Births_GestAge_LMP2 %>% #pull out only the preterms
 
 #Pull preterms out of overall births
 
-Preterms_per_day <- NYBirths_by_Day %>% #required input for everything below
+Preterms_per_day <- NYBirths_by_Day %>%
   dplyr::select(date, Year, Wk_of_Year, Month_number, Births_date) %>%
   full_join(., Births_GestAge_LMP3, by = c("Year", "Month_number")) %>%
   mutate(Preterms = floor(Births_date*Prop_Births))
@@ -382,7 +381,7 @@ Create_Parameters_for <- function(Year_to_simulate){ ##RR per 10F
 
 Random_draws <- function(Parameters_df){ #make a function to repeat x times for monte carlo
   
-  MonteCarlo_df <- Parameters_df %>%
+  MonteCarlo_df <- Parameters_2018 %>%
     rowwise() %>% 
     mutate(Random_draw = rpois(1, lambda)) %>%
     ungroup() %>% 
@@ -395,45 +394,44 @@ Random_draws <- function(Parameters_df){ #make a function to repeat x times for 
   return(MonteCarlo_df)
 }
 
+Parameters_2018 <- Create_Parameters_for(2018) #doing this for 2018 -- will try other years later
+
+set.seed(2) #it would be for the smallest gestational group, which would be ~2-3
+
+Bootstrapped_counts <- 1000 %>% 
+  rerun(Random_draws(Parameters_2018)) %>% 
+  tibble() %>%
+  unnest() %>%
+  group_by(Simulated_RR, date) %>%
+  mutate(Round_of_Sim = row_number(),
+         Splits = paste(Simulated_RR, Round_of_Sim, sep = ".")) %>% #creating one variable on which to split for parallelization
+  ungroup()
 
 #needs to be run per RR and per simulation
 
-Case_Crossovers <- function(Params_for_Simulated_Year){ #make a function to repeat x times for monte carlo
+Case_Crossovers <- function(Simulated_Year){ #make a function to repeat x times for monte carlo
   
-  Simulated_RR <- Params_for_Simulated_Year$Simulated_RR[1]
-  #Simulated_RR <- "0.95" #remove
+  Simulated_RR <- Simulated_Year$Simulated_RR[1]
   
-  CC_Exposures  <-  Params_for_Simulated_Year %>% #Change back to simulated year
+  CC_Exposures  <-  Simulated_Year %>% #Change back to simulated year
     dplyr::select(date, x)
   
-  CC_casedays <- Params_for_Simulated_Year %>% 
+  CC_casedays <- Simulated_Year %>% 
     uncount(All_Preterms) %>%
     mutate(Participant = row_number(), 
            Case = 1) %>%
     dplyr::select(date, Participant, Case) 
   
-  #Month Stratified Case Crossover dataset
+  #Month Stratified Case Crossover
   Simulation_df_MonthStrat <- bind_rows(CC_casedays, Month_stratification(CC_casedays)) %>% 
-    left_join(., CC_Exposures, by = "date") %>%
-    mutate(Prop_Month = (day(date)-1)/days_in_month(date))
+    left_join(., CC_Exposures, by = "date")
   
-  #clogit regression - no adjustment
   mod.clogit.month <- clogit(Case ~ x + strata(Participant), # each case day is a strata #number of events in each day
                              method = "efron", # the method tells the model how to deal with ties
                              Simulation_df_MonthStrat) 
   
   CCOResults_monthstrat <- broom::tidy(mod.clogit.month) %>%
     mutate(Analysis = "CCO_Month") %>%
-    bind_cols(., tibble(Simulated_RR = Simulated_RR))
-  
-  #regression - proportion of month adjustment 
-  mod.clogit.month.prop <- clogit(Case ~ x + Prop_Month + strata(Participant), 
-                             method = "efron", 
-                             Simulation_df_MonthStrat) 
-  
-  CCOResults_monthstrat_propmth <- broom::tidy(mod.clogit.month.prop) %>%
-    filter(term == "x") %>%
-    mutate(Analysis = "CCO_Month_PropMth") %>%
     bind_cols(., tibble(Simulated_RR = Simulated_RR))
   
   ### 2 week stratified case crossover ###
@@ -449,50 +447,32 @@ Case_Crossovers <- function(Params_for_Simulated_Year){ #make a function to repe
     mutate(Analysis = "CCO_2week") %>%
     bind_cols(., tibble(Simulated_RR = Simulated_RR))
   
-  RegressionResults <- bind_rows(CCOResults_monthstrat, CCOResults_monthstrat_propmth, CCOResults_biweekstrat) 
+  RegressionResults <- bind_rows(CCOResults_monthstrat, CCOResults_biweekstrat) 
   
   return(RegressionResults)
   
 }
 
-# SimYr_095 <- Bootstrapped_counts %>%
-#   filter(Splits=="0.9.5")
-# 
-# Case_Crossovers(SimYr_095)
-
 #try on one simulated year 
-# Bootstrapped_counts %>%
-#   filter(Splits=="0.9.5") %>%
-#   Case_Crossovers(.)
-
-#create parameters for 2007, 2010, 2015, 2018
-Parameters_2018 <- Create_Parameters_for(2018) #doing this for 2018 -- will try other years later
-
-set.seed(2) #it would be for the smallest gestational group, which would be ~2-3
-
-Bootstrapped_counts_2018 <- 1000 %>% 
-  rerun(Random_draws(Parameters_2018)) %>% 
-  tibble() %>%
-  unnest() %>%
-  group_by(Simulated_RR, date) %>%
-  mutate(Round_of_Sim = row_number(),
-         Splits = paste(Simulated_RR, Round_of_Sim, sep = ".")) %>% #creating one variable on which to split for parallelization
-  ungroup()
-
+Bootstrapped_counts %>%
+  filter(Splits=="0.9.5") %>%
+  Case_Crossovers(.)
 
 #now to parallelize
 plan(multisession(workers = 30)) #available cores on belle - 2
 
-Results_CaseCrossovers_2018 <- Bootstrapped_counts_2018 %>%
+
+Results_CaseCrossovers <- Bootstrapped_counts %>%
   split(.$Splits) %>%
-  future_map_dfr(., ~Case_Crossovers(.x))     #using furrr -- run the crossovers. Takes 3 days. 
+  future_map_dfr(., ~Case_Crossovers(.x)) #using furrr -- run the crossovers 
 
 saveRDS(Results_CaseCrossovers, here::here("data", "Bootstrapped_CCO_results.RDS"))
 
-Results_CaseCrossovers1 <- Results_CaseCrossovers_2018 %>%
+Results_CaseCrossovers1 <- Results_CaseCrossovers %>%
   group_by(Analysis, Simulated_RR) %>%
   mutate(Round_of_Sim = row_number()) %>%
   ungroup()
+
 
 Bias_Estimates <- Results_CaseCrossovers1 %>%
   group_by(Analysis, Simulated_RR) %>%
@@ -546,16 +526,6 @@ Coverage %>%
   xlab("Round of Simulation (2 week stratified)") +
   ylab("Simulated Effect (RR per 10F)")
 
-Coverage %>%
-  ungroup() %>%
-  filter(Analysis == "CCO_Month_PropMth") %>%
-  ggplot() + 
-  geom_pointrange(aes(x = Round_of_Sim, y = Exp_Estimate, ymin = Exp_ConfLow, ymax = Exp_ConfHigh)) + 
-  geom_hline(aes(yintercept = Simulated_RR), color = "red") +
-  facet_grid(~Simulated_RR, scales = "free") + 
-  xlab("Round of Simulation (Month w/ adjustment for timing in month)") +
-  ylab("Simulated Effect (RR per 10F)")
-
 #calculating percent coverage 
 Coverage1 <- Coverage %>%
   ungroup() %>%
@@ -563,30 +533,5 @@ Coverage1 <- Coverage %>%
   group_by(Simulated_RR, Analysis) %>%
   summarise(Coverage = (sum(Covered)/1000)*100)
 
-Coverage1
-
-###########################
-#### Logistic Approach ####
-###########################
-
-log_odds_from_prob <- function(p){
-  ln_odds = log((p/(1-p)))
-  return(ln_odds)
-}
 
 
-Births_WklyGestAge_07to18_a <- Births_WklyGestAge_07to18 %>%
-  filter(is.na(Notes) & "LMP Gestational Age Weekly Code" != 99) %>%
-  rename(LMP_Age = "LMP Gestational Age Weekly Code") %>%
-  select(Year, LMP_Age, Births)
-
-Total_Singletons_Year <- Births_WklyGestAge_07to18_a %>%
-  group_by(Year) %>%
-  summarise(Births_in_Year = sum(Births))
-
-Birth_proportions_by_gestweek <- Births_WklyGestAge_07to18_a %>%
-  left_join(., Total_Singletons_Year, by = "Year") %>%
-  mutate(Annual_Birth_Prop = Births/Births_in_Year)
-  
-
-  
