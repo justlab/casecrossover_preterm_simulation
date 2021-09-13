@@ -1,51 +1,28 @@
-library(tidyverse)
-library(here)
-library(lubridate)
-library(survival)
-library(broom)
-library(zoo)
-# library(devtools)
-# devtools::install_github("DavisVaughan/furrr")
-library(furrr)
-library(scales)
-#install.packages("ggpubr")
-library(ggpubr)
-
-
-
-#Datasets#
-Births_WklyGestAge_07to18 <- read_tsv(here::here("data", "Births_NYS_Year_SingletonGestAge.txt")) 
-NYBirths_by_Weekday <- read_tsv(here::here("data", "Day_of_Wk_Natality_NY_2007to18.txt")) 
-NYBirths_by_Month_plural <- read_tsv(here::here("data", "Plurality_by_MonthYear_CDCWONDER.txt")) 
-NYBirths_by_Month_single <- read_tsv(here::here("data", "Births_NYS_YrMonth_SingletonGestAge.txt")) 
-Annual_Singleton_Births <- read_tsv(here::here("data", "Annual_Singleton_NYS.txt")) 
-LaGuardiaTemp <- read_csv(here::here("data", "LaGuardiaTemp_2007to2018.csv")) 
-
 
 #### Functions used throughout ####
 
-coalesce_join <- function(x, y, 
-                          by = NULL, suffix = c(".x", ".y"), 
+coalesce_join <- function(x, y,
+                          by = NULL, suffix = c(".x", ".y"),
                           join = dplyr::full_join, ...) {
   joined <- join(x, y, by = by, suffix = suffix, ...)
   # names of desired output
   cols <- union(names(x), names(y))
-  
+
   to_coalesce <- names(joined)[!names(joined) %in% cols]
   suffix_used <- suffix[ifelse(endsWith(to_coalesce, suffix[1]), 1, 2)]
   # remove suffixes and deduplicate
   to_coalesce <- unique(substr(
-    to_coalesce, 
-    1, 
+    to_coalesce,
+    1,
     nchar(to_coalesce) - nchar(suffix_used)
   ))
-  
+
   coalesced <- purrr::map_dfc(to_coalesce, ~dplyr::coalesce(
-    joined[[paste0(.x, suffix[1])]], 
+    joined[[paste0(.x, suffix[1])]],
     joined[[paste0(.x, suffix[2])]]
   ))
   names(coalesced) <- to_coalesce
-  
+
   dplyr::bind_cols(joined, coalesced)[cols]
 }
 
@@ -178,7 +155,7 @@ FourWk_aka28day_stratification <- function(Hazard_Periods){ #time stratified app
 getSeason <- function(input.date){
   numeric.date <- 100*month(input.date)+day(input.date)
   ## input Seasons upper limits in the form MMDD in the "break =" option:
-  cuts <- base::cut(numeric.date, breaks = c(0,319,0620,0921,1220,1231)) 
+  cuts <- base::cut(numeric.date, breaks = c(0,319,0620,0921,1220,1231))
   # rename the resulting groups (could've been done within cut(...levels=) if "Winter" wasn't double
   levels(cuts) <- c("Winter","Spring","Summer","Fall","Winter")
   return(cuts)
@@ -187,97 +164,109 @@ getSeason <- function(input.date){
 #### Cleaning Temperature Data ####
 
 #Visualize min and max temp at LaGuardia Airport
-LaGuardiaTemp1 <- LaGuardiaTemp %>%
-  mutate(date = mdy(DATE)) %>%
-  rename("x" = "TMAX") %>%
-  dplyr::select(date, x)
+load_temp <- function(LaGuardiaTemp_file){
+  LaGuardiaTemp <- read_csv(LaGuardiaTemp_file, col_types = c("cccddd"))
+  LaGuardiaTemp1 <- LaGuardiaTemp %>%
+    mutate(date = mdy(DATE)) %>%
+    rename("x" = "TMAX") %>%
+    dplyr::select(date, x)
+  LaGuardiaTemp1
+}
+# LaGuardiaTemp1 <- load_temp(LaGuardiaTemp_file)
 
-ggplot(LaGuardiaTemp1, aes(x = date, y = x)) + geom_point() + geom_smooth(method = "lm", se = FALSE) +
-  labs(title = "Observed max temperatures at LaGuardia Airport") + 
-  ylab("Max temperature (F)") + 
-  theme(text = element_text(size = 15))
+plot_temp <- function(LaGuardiaTemp1){
+  ggplot(LaGuardiaTemp1, aes(x = date, y = x)) + geom_point() + geom_smooth(method = "lm", se = FALSE) +
+    labs(title = "Observed max temperatures at LaGuardia Airport") +
+    ylab("Max temperature (F)") +
+    theme(text = element_text(size = 15))
+}
 
 
 ### Cleaning CDC Wonder and estimating all preterm births per day NYS   ####
 
-Clean_and_smooth_data <- function(NYBirths_by_Month_plural, NYBirths_by_Weekday, NYBirths_by_Month_single){
-#pulling out annual pattern of proportion births per month
-NYBirths_by_Month1 <- NYBirths_by_Month_plural %>% 
-  filter(!is.na(Month),
-         `Plurality or Multiple Birth`=="Single") %>%
-  rename("Month_number" = `Month Code`) %>%
-  select(Year, Month, Month_number, Births) %>%
-  mutate(Month = factor(Month, levels = month.name)) %>%
-  group_by(Year) %>%
-  mutate(Births_Year = sum(Births),
-         Pct_of_total_births = Births/Births_Year) %>%
-  ungroup()
+Clean_and_smooth_data <- function(NYBirths_by_Month_plural_file, NYBirths_by_Weekday_file){
+  #pulling out annual pattern of proportion births per month
+  NYBirths_by_Month_plural <- read_tsv(NYBirths_by_Month_plural_file, col_types = cols())
+  NYBirths_by_Month1 <- NYBirths_by_Month_plural %>%
+    filter(!is.na(Month),
+           `Plurality or Multiple Birth`=="Single") %>%
+    rename("Month_number" = `Month Code`) %>%
+    select(Year, Month, Month_number, Births) %>%
+    mutate(Month = factor(Month, levels = month.name)) %>%
+    group_by(Year) %>%
+    mutate(Births_Year = sum(Births),
+           Pct_of_total_births = Births/Births_Year) %>%
+    ungroup()
 
-#get raw number of singleton births per month of each year
-NYBirths_by_MonthYear <- NYBirths_by_Month1 %>%
-  distinct(Year, Month_number, Births, Births_Year)
+  #get raw number of singleton births per month of each year
+  NYBirths_by_MonthYear <- NYBirths_by_Month1 %>%
+    distinct(Year, Month_number, Births, Births_Year)
 
-#Estimate how many births take place in a given week of the year
-NYBirths_by_Month2 <- NYBirths_by_Month1 %>%
-  mutate(Week_Births = Births/4, #split by week -- assuming the average is representative of the middle of the series
-         FirstWk = week(as.Date(paste(Year, Month_number,"01", sep = "-")))) %>%
-  rowwise() %>% 
-  mutate(Week = sample(1:2, 1)) %>% 
-  ungroup() %>% #to stop rowwise
-  mutate(Wk_of_Year = FirstWk + Week) %>% #randomly selecting either the 2nd or 3rd week to represent middle of time series 
-  group_by(Year) %>%
-  complete(Wk_of_Year = seq(1,52)) %>% 
-  ungroup() %>%
-  mutate(date = as.Date(paste(Year, Wk_of_Year, 1, sep="-"), "%Y-%U-%u"),
-         Month_number = if_else(is.na(Month_number), month(date), Month_number)) %>%
-  coalesce_join(., NYBirths_by_MonthYear, by = c("Year", "Month_number")) %>%
-  rename("Month_Births" = "Births") %>%
-  mutate(Week_Births1 = floor(na.approx(Week_Births, rule = 2)), #linear interpolation of births between middle of month estimates
-         Week_Births_Pct = Week_Births1/Births_Year) %>%
-  dplyr::select(date, Year, Wk_of_Year, Month_number, Week_Births1, Week_Births_Pct)
+  #Estimate how many births take place in a given week of the year
+  NYBirths_by_Month2 <- NYBirths_by_Month1 %>%
+    mutate(Week_Births = Births/4, #split by week -- assuming the average is representative of the middle of the series
+           FirstWk = week(as.Date(paste(Year, Month_number,"01", sep = "-")))) %>%
+    rowwise() %>%
+    mutate(Week = sample(1:2, 1)) %>%
+    ungroup() %>% #to stop rowwise
+    mutate(Wk_of_Year = FirstWk + Week) %>% #randomly selecting either the 2nd or 3rd week to represent middle of time series
+    group_by(Year) %>%
+    complete(Wk_of_Year = seq(1,52)) %>%
+    ungroup() %>%
+    mutate(date = as.Date(paste(Year, Wk_of_Year, 1, sep="-"), "%Y-%U-%u"),
+           Month_number = if_else(is.na(Month_number), month(date), Month_number)) %>%
+    coalesce_join(., NYBirths_by_MonthYear, by = c("Year", "Month_number")) %>%
+    rename("Month_Births" = "Births") %>%
+    mutate(Week_Births1 = floor(na.approx(Week_Births, rule = 2)), #linear interpolation of births between middle of month estimates
+           Week_Births_Pct = Week_Births1/Births_Year) %>%
+    dplyr::select(date, Year, Wk_of_Year, Month_number, Week_Births1, Week_Births_Pct)
 
-#1) Births by day of week
-NYBirths_by_Weekday1 <- NYBirths_by_Weekday %>%
-  filter(`Plurality or Multiple Birth`=="Single") %>%
-  rename("Month_number" = `Month Code`) %>%
-  select(Year, Month, Month_number, Births, Weekday) %>%
-  mutate(Month = factor(Month, levels = month.name)) %>%
-  group_by(Month_number, Year) %>%
-  mutate(Births_Month = sum(Births),
-         Prop_Births_Wkday = Births/Births_Month)
+  #1) Births by day of week
+  NYBirths_by_Weekday <- read_tsv(NYBirths_by_Weekday_file, col_types = cols())
+  NYBirths_by_Weekday1 <- NYBirths_by_Weekday %>%
+    filter(`Plurality or Multiple Birth`=="Single") %>%
+    rename("Month_number" = `Month Code`) %>%
+    select(Year, Month, Month_number, Births, Weekday) %>%
+    mutate(Month = factor(Month, levels = month.name)) %>%
+    group_by(Month_number, Year) %>%
+    mutate(Births_Month = sum(Births),
+           Prop_Births_Wkday = Births/Births_Month)
 
-#2) use to create a new df for day of year and projected proportion of births
-All_Dates_inTimePeriod <- tibble(date = seq.Date(as.Date("2007-01-01"), as.Date("2018-12-31"), by = "day")) %>%
-  mutate(Wk_of_Year = week(date),
-         Year = year(date))
+  #2) use to create a new df for day of year and projected proportion of births
+  All_Dates_inTimePeriod <- tibble(date = seq.Date(as.Date("2007-01-01"), as.Date("2018-12-31"), by = "day")) %>%
+    mutate(Wk_of_Year = week(date),
+           Year = year(date))
 
-NYBirths_by_Day <- All_Dates_inTimePeriod %>% 
-  coalesce_join(., NYBirths_by_Month2, by = c("Year", "Wk_of_Year")) %>% 
-  mutate(Weekday = as.character(wday(date, label = TRUE, abbr = FALSE))) %>%
-  left_join(., NYBirths_by_Weekday1, by = c("Year","Month_number","Weekday")) %>%
-  mutate(Births_date = floor(Week_Births1 * Prop_Births_Wkday),
-         Wk_of_Year = if_else(Wk_of_Year == 53, 52, Wk_of_Year)) %>%
-  fill(., Month_number:Week_Births_Pct,Month, Births_Month, .direction = "down") %>%
-  mutate(Births_date = na.approx(Births_date, rule = 2))
+  NYBirths_by_Day <- All_Dates_inTimePeriod %>%
+    coalesce_join(., NYBirths_by_Month2, by = c("Year", "Wk_of_Year")) %>%
+    mutate(Weekday = as.character(wday(date, label = TRUE, abbr = FALSE))) %>%
+    left_join(., NYBirths_by_Weekday1, by = c("Year","Month_number","Weekday")) %>%
+    mutate(Births_date = floor(Week_Births1 * Prop_Births_Wkday),
+           Wk_of_Year = if_else(Wk_of_Year == 53, 52, Wk_of_Year)) %>%
+    fill(., Month_number:Week_Births_Pct,Month, Births_Month, .direction = "down") %>%
+    mutate(Births_date = na.approx(Births_date, rule = 2))
 
-return(NYBirths_by_Day)
+  return(NYBirths_by_Day)
 }
 
-Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single, Births_WklyGestAge_07to18, Annual_Singleton_Births){
-  
-  #now look at singletons by gestational age to get proportion of births 
+Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_WklyGestAge_07to18_file, Annual_Singleton_Births_file){
+
+  #now look at singletons by gestational age to get proportion of births
+  Annual_Singleton_Births <- read_tsv(Annual_Singleton_Births_file, col_types = cols())
   Annual_Singleton_Births1 <- Annual_Singleton_Births %>%
     filter(is.na(Notes)) %>%
     rename(Total_Singleton_Births_Year = "Births") %>%
     select(Year, Total_Singleton_Births_Year)
-  
-  MonthBirths_total <- NYBirths_by_Month_single %>% 
+
+  NYBirths_by_Month_single <- read_tsv(NYBirths_by_Month_single_file, col_types = cols())
+  MonthBirths_total <- NYBirths_by_Month_single %>%
     filter(Notes == "Total" & !is.na(`Month Code`)) %>%
     rename("Month_number" = `Month Code`) %>%
     mutate(Births_month = as.numeric(Births)) %>%
-    select(Year, Month_number, Births_month) 
-  
+    select(Year, Month_number, Births_month)
+
   ## All births by gestational age
+  Births_WklyGestAge_07to18 <- read_tsv(Births_WklyGestAge_07to18_file, col_types = cols())
   Births_WklyGestAge_07to18_a <- Births_WklyGestAge_07to18 %>%
     filter(is.na(Notes) & "LMP Gestational Age Weekly Code" != 99) %>%
     rename(Gest_Age = "LMP Gestational Age Weekly Code",
@@ -285,19 +274,19 @@ Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_singl
     select(Year, Gest_Age, Year_Births_perAge) %>%
     left_join(., Annual_Singleton_Births1, by = "Year") %>%
     mutate(Year_Births_perAge = as.numeric(na_if(Year_Births_perAge, "Suppressed")))
-  
-  Births_WklyGestAge_07to18_b <- Births_WklyGestAge_07to18_a %>% 
-    group_by(Year) %>% 
+
+  Births_WklyGestAge_07to18_b <- Births_WklyGestAge_07to18_a %>%
+    group_by(Year) %>%
     summarise(Births_with_GestAge = sum(Year_Births_perAge, na.rm = T))
-  
+
   #making estimates for all gestational ages
   Births_WklyGestAge_07to18_c <- Births_WklyGestAge_07to18_a %>%
     left_join(., Births_WklyGestAge_07to18_b, by = "Year") %>%
-    mutate(Year_Births_perAge = if_else(is.na(Year_Births_perAge), 
-                                        Total_Singleton_Births_Year - Births_with_GestAge, 
+    mutate(Year_Births_perAge = if_else(is.na(Year_Births_perAge),
+                                        Total_Singleton_Births_Year - Births_with_GestAge,
                                         Year_Births_perAge)) %>%
     select(-Births_with_GestAge)
-  
+
   NYBirths_by_Month_single1 <- NYBirths_by_Month_single %>%
     rename("Month_number" = `Month Code`,
            Gest_Age = `LMP Gestational Age Weekly Code`) %>%
@@ -306,58 +295,56 @@ Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_singl
     mutate(Month = factor(Month, levels = month.name)) %>%
     left_join(., MonthBirths_total, by = c("Year", "Month_number")) %>%
     left_join(., Births_WklyGestAge_07to18_c, by = c("Year", "Gest_Age"))
-  
+
   Lowest_Preterm_Prop_notSuppressed <- NYBirths_by_Month_single1 %>%
-    filter(Births != "Suppressed") %>% 
+    filter(Births != "Suppressed") %>%
     group_by(Year, Month_number) %>%
     slice_min(order_by = Gest_Age) %>%
     ungroup() %>%
     mutate(Prop_of_LowestPreterm = as.numeric(Births)/Year_Births_perAge) %>%
     select(Year, Month_number, Prop_of_LowestPreterm)
-  
+
   NYBirths_by_Month_preterm_single2 <- NYBirths_by_Month_single1 %>%
     left_join(., Lowest_Preterm_Prop_notSuppressed, by = c("Year", "Month_number")) %>%
     mutate(Births = as.numeric(na_if(Births, "Suppressed")),
            Births = if_else(is.na(Births), floor(Year_Births_perAge*Prop_of_LowestPreterm), Births),
-           Prop_Births = Births/Births_month) %>% 
+           Prop_Births = Births/Births_month) %>%
     filter(Gest_Age < 37) %>%
-    dplyr::select(Year, Month_number, Gest_Age, Prop_Births) 
-  
+    dplyr::select(Year, Month_number, Gest_Age, Prop_Births)
+
   Preterms_per_day_all <- NYBirths_by_Day %>% #required input for everything below
     dplyr::select(date, Year, Wk_of_Year, Month_number, Births_date) %>%
     full_join(., NYBirths_by_Month_preterm_single2, by = c("Year", "Month_number")) %>%
-    mutate(Preterms = floor(Births_date*Prop_Births)) #round(Births_date*Prop_Births, 0)  
- 
-  return(Preterms_per_day_all) 
+    mutate(Preterms = floor(Births_date*Prop_Births)) #round(Births_date*Prop_Births, 0)
+
+  return(Preterms_per_day_all)
 }
 
-NYBirths_by_Day <- Clean_and_smooth_data(NYBirths_by_Month_plural, NYBirths_by_Weekday, NYBirths_by_Month_single)
-Preterms_per_day_all <- Estimate_all_daily_preterms(NYBirths_by_Day, NYBirths_by_Month_single, Births_WklyGestAge_07to18, Annual_Singleton_Births)
 
 #### Creating Simulations and conducting case crossovers ####
 
 ##need to create lambdas ###
-Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df){ ##RR per 10F
-  
+Create_Parameters_for <- function(start_date, end_date, Preterms_per_day_df, LaGuardiaTemp1){ ##RR per 10F
+
   RiskRatios <- tibble(RR_per_10F = seq.default(from = .9, to = 1.25, length.out = 8),
                        Simulated_RR = seq.default(from = .9, to = 1.25, length.out = 8)) %>%
     mutate(lnRR_per_degreeF = log(RR_per_10F)/10)
-  
+
   Preterms_per_day_indexYear <- Preterms_per_day_df %>%
-    filter(date >= start_date & date <= end_date) #was filter(date >= start_date & date < end_date) 
+    filter(date >= start_date & date <= end_date) 
   
   Beta_naughts <- Preterms_per_day_indexYear %>%
     group_by(Gest_Age, Month_number) %>%
-    summarise(ln_beta_naught = log(mean(Preterms, na.rm = TRUE)), #calculating as input 
+    summarise(ln_beta_naught = log(mean(Preterms, na.rm = TRUE)), #calculating as input
               Dispersion = var(Preterms, na.rm = TRUE)) %>%
     crossing(RiskRatios) %>%
     ungroup()
-  
+
   Parameters <- Preterms_per_day_indexYear %>%
-    left_join(., Beta_naughts, by = c("Gest_Age", "Month_number")) %>% 
+    left_join(., Beta_naughts, by = c("Gest_Age", "Month_number")) %>%
     left_join(., LaGuardiaTemp1, by = "date") %>%
-    mutate(lambda = exp(ln_beta_naught + (lnRR_per_degreeF*x))) 
-  
+    mutate(lambda = exp(ln_beta_naught + (lnRR_per_degreeF*x)))
+
   return(Parameters)
 }
 
@@ -380,36 +367,30 @@ get_end_date <- function(df_with_casedays, control_select = c("28_day", "month",
   max_num_days <- as.numeric(difftime(as.Date(last_date),as.Date(start_date), "day"))+1
   
   if(control_select == "2_week") {
-    
     end_date <- as.Date(start_date) + days(14*floor((max_num_days/14))-1)
-    
   }
   
   if(control_select == "28_day") {
-    
     end_date <- as.Date(start_date) + days(28*floor((max_num_days/28))-1)
-    
   }
   
   if(control_select=="month") {
-    
     elapsed_months <- 12 * (year(as.Date(last_date)) - year(as.Date(start_date))) + (month(as.Date(last_date)) - month(as.Date(start_date)))
     end_date <- as.Date(start_date) + months(elapsed_months)-days(1)
-    
   }
   
   return(end_date)
 }
 
 
-Case_Crossovers <- function(Params_for_Simulated_Year){ 
-  
+Case_Crossovers <- function(Params_for_Simulated_Year){
+
   Simulated_RR <- Params_for_Simulated_Year$Simulated_RR[1]
-  
-  CC_Exposures  <- Params_for_Simulated_Year %>% #make this swap in
+
+  CC_Exposures <- Params_for_Simulated_Year %>% #make this swap in
     dplyr::select(date, x) %>%
     distinct(date, x)
-  
+
   CC_casedays <- Params_for_Simulated_Year %>% filter(Random_draw!=0)%>%
     uncount(Random_draw) %>%
     mutate(Participant = row_number(),
@@ -453,10 +434,6 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
     bind_rows(., Biweekly_stratification(.)) %>% 
     left_join(., CC_Exposures, by = "date") 
   
-  # bind_rows(CC_casedays, Biweekly_stratification(CC_casedays))%>% 
-  # left_join(., CC_Exposures, by = "date") %>%
-  # filter(date <= get_end_date(CC_casedays, "2_week")
-  
   mod.clogit.2wk <- clogit(Case ~ x + strata(Participant), # each case day is a strata #number of events in each day
                            method = "efron", # the method tells the model how to deal with ties
                            Simulation_df_2WeekStrat) 
@@ -468,79 +445,15 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
   RegressionResults <- bind_rows(CCOResults_monthstrat, CCOResults_28daystrat, CCOResults_biweekstrat) 
   
   return(RegressionResults)
-  
 }
 
-# Case_Crossovers <- function(Params_for_Simulated_Year){ 
-#   
-#   Simulated_RR <- Params_for_Simulated_Year$Simulated_RR[1]
-#   
-#   CC_Exposures  <-  Params_for_Simulated_Year %>% #Change back to simulated year
-#     dplyr::select(date, x) %>%
-#     distinct(date, x)
-#   
-#   CC_casedays <- Params_for_Simulated_Year %>% filter(Random_draw!=0)%>%
-#     uncount(Random_draw) %>%
-#     mutate(Participant = row_number(), 
-#            Case = 1) %>%
-#     dplyr::select(date, Participant, Case, Gest_Age) 
-#   
-#   #Month Stratified Case Crossover dataset
-#   Simulation_df_MonthStrat <- bind_rows(CC_casedays, Month_stratification(CC_casedays)) %>% 
-#     left_join(., CC_Exposures, by = "date") #%>%
-#     #mutate(Prop_Month = (day(date)-1)/days_in_month(date)) 
-#   
-#   #clogit regression - no adjustment
-#   mod.clogit.month <- clogit(Case ~ x + strata(Participant), # each case day is a strata #number of events in each day
-#                              method = "efron", # the method tells the model how to deal with ties
-#                              Simulation_df_MonthStrat) 
-#   
-#   CCOResults_monthstrat <- broom::tidy(mod.clogit.month, conf.int = TRUE) %>%
-#     mutate(Analysis = "CCO_Month") %>%
-#     bind_cols(., tibble(Simulated_RR = Simulated_RR))
-#   
-#   ### 28day stratified model ### 
-#   Simulation_df_28dayStrat <- bind_rows(CC_casedays, FourWk_aka28day_stratification(CC_casedays)) %>% 
-#     left_join(., CC_Exposures, by = "date")
-#   
-#   mod.clogit.fourwk <- clogit(Case ~ x + strata(Participant), 
-#                              method = "efron", 
-#                              Simulation_df_28dayStrat) 
-#   
-#   CCOResults_28daystrat <- broom::tidy(mod.clogit.fourwk, conf.int = TRUE) %>%
-#     filter(term == "x") %>%
-#     mutate(Analysis = "CCO_28day") %>%
-#     bind_cols(., tibble(Simulated_RR = Simulated_RR))
-#   
-# 
-#   ### 2 week stratified case crossover ###
-#   
-#   Simulation_df_2WeekStrat <- bind_rows(CC_casedays, Biweekly_stratification(CC_casedays))%>% 
-#     left_join(., CC_Exposures, by = "date")
-#   
-#   mod.clogit.2wk <- clogit(Case ~ x + strata(Participant), # each case day is a strata #number of events in each day
-#                            method = "efron", # the method tells the model how to deal with ties
-#                            Simulation_df_2WeekStrat) 
-#   
-#   CCOResults_biweekstrat <- broom::tidy(mod.clogit.2wk, conf.int = TRUE) %>%
-#     mutate(Analysis = "CCO_2week") %>%
-#     bind_cols(., tibble(Simulated_RR = Simulated_RR))
-#   
-#   RegressionResults <- bind_rows(CCOResults_monthstrat, CCOResults_28daystrat, CCOResults_biweekstrat) 
-#   
-#   return(RegressionResults)
-#   
-# }
+Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats, Temp_df, target_seed){
+  set.seed(target_seed)
+  plan(multisession)
+  Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day_df, Temp_df)
 
-#create parameters for 2007 and 2018
-plan(multisession(workers = 8)) #for parallelization
-
-Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats){
-  
-  Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day_df)
-  
-  Bootstrapped_counts <- number_of_repeats %>% 
-    rerun(Random_draws(Parameters)) %>% 
+  Bootstrapped_counts <- number_of_repeats %>%
+    rerun(Random_draws(Parameters)) %>%
     tibble() %>%
     unnest(cols = c(.)) %>%
     dplyr::select(date, Simulated_RR, Gest_Age, x, Random_draw) %>%
@@ -549,28 +462,25 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
            Splits = paste(Simulated_RR, Round_of_Sim, sep = ".")) %>% #creating one variable on which to split for parallelization
     ungroup()
   
-  Results_CaseCrossovers <- Bootstrapped_counts %>%
-    split(.$Splits) %>%
-    future_map_dfr(., ~Case_Crossovers(.x), .progress = T)     
+  message("Bootstrapped")
+  split_counts <- Bootstrapped_counts %>% split(.$Splits)
   
+  message("Split, starting future_map_dfr...")
+  Results_CaseCrossovers <- split_counts %>%
+    future_map_dfr(., ~Case_Crossovers(.x), .progress = T, .options = furrr_options(seed = target_seed))
+
   return(Results_CaseCrossovers)
-  
+
 }
-
-set.seed(1)
-CCO_simulation_2007 <- Simulate_and_analyze_CCO("2007-05-01", "2007-10-01", Preterms_per_day_all, 1000)
-
-set.seed(0)
-CCO_simulation_2018 <- Simulate_and_analyze_CCO("2018-05-01", "2018-10-01", Preterms_per_day_all, 1000)
 
 #### Analyze Results ####
 Create_table_of_bias_results <- function(Simulation_results){
-  
-  Results_CaseCrossovers <- Simulation_results %>% 
+
+  Results_CaseCrossovers <- Simulation_results %>%
     group_by(Analysis, Simulated_RR) %>%
     mutate(Round_of_Sim = row_number()) %>%
     ungroup()
-  
+
   Bias_Estimates <- Results_CaseCrossovers %>%
     mutate(Bias_per_10F = round((estimate*10) - log(Simulated_RR), 3),
            Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_28day"), 
@@ -583,24 +493,24 @@ Create_table_of_bias_results <- function(Simulation_results){
   return(Bias_Estimates1)
 }
 
-Create_table_of_coverage_results <- function(Simulation_results){
+Create_table_of_coverage_results <- function(Simulation_results, number_of_repeats){
 
-  Results_CaseCrossovers <-  Simulation_results %>% 
+  Results_CaseCrossovers <- Simulation_results %>%
     group_by(Analysis, Simulated_RR) %>%
     mutate(Round_of_Sim = row_number()) %>%
     ungroup()
-  
+
   Coverage <- Results_CaseCrossovers %>%
     mutate(Exp_ConfLow = exp(conf.low*10),
            Exp_ConfHigh = exp(conf.high*10),
            Exp_Estimate = exp(estimate*10)) %>%
     dplyr::select(Round_of_Sim, Exp_Estimate, Exp_ConfLow, Exp_ConfHigh, Simulated_RR, Analysis)
-  
+
   Coverage1 <- Coverage %>%
     ungroup() %>%
     mutate(Covered = if_else(Simulated_RR>=Exp_ConfLow & Simulated_RR<=Exp_ConfHigh, 1, 0)) %>%
     group_by(Simulated_RR, Analysis) %>%
-    summarise(Coverage = (sum(Covered)/1000)) %>%
+    summarise(Coverage = (sum(Covered)/number_of_repeats)) %>%
     ungroup() %>%
     mutate(Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month", "CCO_28day"), 
                              labels = c("Time stratified: 2 weeks", "Time Stratified: Month", "Time Stratified: 28 days")))
@@ -608,14 +518,14 @@ Create_table_of_coverage_results <- function(Simulation_results){
   Coverage2 <- Coverage1 %>%
     group_by(Analysis) %>%
     summarise(min_coverage = min(Coverage),
-              max_coverage = max(Coverage))  
-  
-  return(Coverage2) 
+              max_coverage = max(Coverage))
+
+  return(Coverage2)
 }
 
 
-Visualize_Results <- function(results_df){
-  
+Visualize_Results <- function(results_df, number_of_repeats){
+
   Results_CaseCrossovers1 <- results_df %>%
     #filter(Analysis=="CCO_2week" | Analysis=="CCO_Month") %>%
     group_by(Analysis, Simulated_RR) %>%
@@ -623,14 +533,14 @@ Visualize_Results <- function(results_df){
            Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_28day", "CCO_Month"), 
                              labels = c("Time stratified: 2 weeks", "Time Stratified: 28 days", "Time Stratified: Month"))) %>%
     ungroup()
-  
+
   Bias_Estimates <- Results_CaseCrossovers1 %>%
     mutate(Bias_per_10F = (estimate*10)-log(Simulated_RR)) 
   
   Bias_plot <- ggplot(Bias_Estimates) + 
     geom_boxplot(aes(Simulated_RR, Bias_per_10F, fill = Analysis), width = .5) + 
     facet_grid(~Simulated_RR, scales = "free", switch = "x") +
-    ylab("Bias") + 
+    ylab("Bias") +
     theme_minimal(base_size = 22) +
     scale_x_continuous(breaks = NULL) +
     theme(legend.position = "bottom",
@@ -648,13 +558,13 @@ Visualize_Results <- function(results_df){
     ungroup() %>%
     mutate(Covered = if_else(Simulated_RR>=Exp_ConfLow & Simulated_RR<=Exp_ConfHigh, 1, 0)) %>%
     group_by(Simulated_RR, Analysis) %>%
-    summarise(Coverage = (sum(Covered)/1000)) %>%
+    summarise(Coverage = (sum(Covered)/number_of_repeats)) %>%
     ungroup()
-  
+
   Coverage_plot <- ggplot() + 
     geom_point(data = Coverage1, 
                aes(x = as.numeric(Analysis), y = Coverage, shape = Analysis, fill = Analysis), size = 9, shape = 23) + #position=position_dodge(0.05),
-    facet_grid(~Simulated_RR, switch = "x") + 
+    facet_grid(~Simulated_RR, switch = "x") +
     geom_hline(yintercept = .95, linetype = 2) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1, scale = 100), minor_breaks = seq(0 , 1, .05), breaks = seq(0, 1, .20), limits = c(0,1)) +
     scale_x_continuous(breaks = NULL, limits = c(.5, 3.5)) +
@@ -662,16 +572,11 @@ Visualize_Results <- function(results_df){
     theme(legend.position = "none") +
     xlab("Simulated Relative Risk") +
     ylab("Coverage of 95% CI")
-  
+
   combined_plot <- ggarrange(Bias_plot, Coverage_plot, ncol = 1, nrow = 2, labels = "AUTO")
   return(combined_plot)
-  }
+}
 
-Create_table_of_bias_results(CCO_simulation_2007)
-Create_table_of_bias_results(CCO_simulation_2018)
-
-Create_table_of_coverage_results(CCO_simulation_2007)
-Create_table_of_coverage_results(CCO_simulation_2018)
 
 #calculate a signed percent bias of estimated from simulated
 Visualize_Percent_Bias <- function(results_df){ 
@@ -734,18 +639,6 @@ Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
   return(combined_plot)
 }
 
-Visualize_Results(CCO_simulation_2007)
-Visualize_Results(CCO_simulation_2018) #1500 x 800
-
-Visualize_Percent_Bias(CCO_simulation_2007)
-Visualize_Percent_Bias(CCO_simulation_2018)
-
-
-Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2007-05-01", "2007-10-01") #700*550
-Visualize_Births_and_Temp(LaGuardiaTemp1, Preterms_per_day_all, "2018-05-01", "2018-10-01")
-
-
-
 NotSo_Month_stratification <- function(Hazard_Periods){
     
     Control_Periods <- Hazard_Periods %>%
@@ -797,4 +690,3 @@ NotSo_Month_stratification <- function(Hazard_Periods){
 
 View(bind_rows(test_data, NotSo_Month_stratification(test_data)) %>%
        arrange(Participant, Gest_Age))
-  
