@@ -16,7 +16,8 @@ tar_option_set(
     "scales",
     "ggpubr",
     "future"
-  )#, error = "workspace"
+  ),
+  format = 'qs'
 )
 list(
   # INPUT DATA ####
