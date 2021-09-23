@@ -688,5 +688,3 @@ NotSo_Month_stratification <- function(Hazard_Periods){
     return(Control_Periods1)
   }
 
-View(bind_rows(test_data, NotSo_Month_stratification(test_data)) %>%
-       arrange(Participant, Gest_Age))
