@@ -37,13 +37,13 @@ list(
   # DATA PREPARATION ####
   tar_target(LaGuardiaTemp1, load_temp(LaGuardiaTemp_file)),
   tar_target(NYBirths_by_Day,
-              Clean_and_smooth_data(NYBirths_by_Month_plural_file,
-                                    NYBirths_by_Weekday_file)),
+             Clean_and_smooth_data(NYBirths_by_Month_plural_file,
+                                   NYBirths_by_Weekday_file)),
   tar_target(Preterms_per_day_all,
-              Estimate_all_daily_preterms(NYBirths_by_Day,
-                                          NYBirths_by_Month_single_file,
-                                          Births_WklyGestAge_07to18_file,
-                                          Annual_Singleton_Births_file)),
+             Estimate_all_daily_preterms(NYBirths_by_Day,
+                                         NYBirths_by_Month_single_file,
+                                         Births_WklyGestAge_07to18_file,
+                                         Annual_Singleton_Births_file)),
 
   # SIMULATIONS ####
   tar_target(repeats, 100), # 1000 in publication, shorter for quick demonstration
