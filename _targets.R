@@ -44,10 +44,11 @@ list(
 
   # SIMULATIONS ####
   tar_target(repeats, 1000), # 1000 in publication, shorter for quick demonstration
+  tar_target(batch_size, max(as.integer(repeats/10), 1)),
   tar_target(input_simulation_2007,
              Bootstrap_params(start_date = "2007-05-01", end_date = "2007-10-01", 
                               Preterms_per_day_all, number_of_repeats = repeats, 
-                              LaGuardiaTemp1, target_seed = 1, batch_size = 10) %>%
+                              LaGuardiaTemp1, target_seed = 1, batch_size) %>%
                tar_group(),
              iteration = 'group'),
   tar_target(CCO_simulation_2007, 
@@ -58,7 +59,7 @@ list(
   tar_target(input_simulation_2018,
              Bootstrap_params(start_date = "2018-05-01", end_date = "2018-10-01", 
                               Preterms_per_day_all, number_of_repeats = repeats, 
-                              LaGuardiaTemp1, target_seed = 0, batch_size = 10) %>%
+                              LaGuardiaTemp1, target_seed = 0, batch_size) %>%
                tar_group(),
              iteration = 'group'),
   tar_target(CCO_simulation_2018, 

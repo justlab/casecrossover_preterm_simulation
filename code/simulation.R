@@ -475,7 +475,7 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
 # Prepare table for CCO, group by splits for later parallel computation of CCO in targets
 Bootstrap_params <- function(start_date, end_date, Preterms_per_day_df, 
                              number_of_repeats, Temp_df, target_seed,
-                             batch_size = 10){
+                             batch_size){
   set.seed(target_seed)
   Parameters <- Create_Parameters_for(start_date, end_date, 
                                       Preterms_per_day_df, Temp_df)
