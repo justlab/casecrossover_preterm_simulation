@@ -474,7 +474,8 @@ Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, 
 
 # Prepare table for CCO, group by splits for later parallel computation of CCO in targets
 Bootstrap_params <- function(start_date, end_date, Preterms_per_day_df, 
-                             number_of_repeats, Temp_df, target_seed){
+                             number_of_repeats, Temp_df, target_seed,
+                             batch_size = 10){
   set.seed(target_seed)
   Parameters <- Create_Parameters_for(start_date, end_date, 
                                       Preterms_per_day_df, Temp_df)
@@ -489,7 +490,11 @@ Bootstrap_params <- function(start_date, end_date, Preterms_per_day_df,
            # creating one variable on which to split for parallelization
            Splits = paste(Simulated_RR, Round_of_Sim, sep = ".")) %>% 
     ungroup() %>% 
-    group_by(Splits)
+    group_by(Splits) %>% 
+    mutate(group_id = cur_group_id()) %>%
+    mutate(batch = findInterval(group_id, seq(1, max(group_id), batch_size))) %>% 
+    mutate(group_id = NULL) %>% 
+    group_by(batch) 
   Bootstrapped_counts 
 }
 

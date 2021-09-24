@@ -6,6 +6,7 @@ source("code/simulation.R")
 plan(callr)
 
 #options(mc.cores = 20) # change to suit system core count and available memory; see readme
+batch_length = 10
 
 tar_option_set(
   packages = c(
@@ -21,7 +22,8 @@ tar_option_set(
     "ggpubr",
     "future"
   ),
-  format = 'qs'
+  format = 'qs', 
+  workspace_on_error = TRUE
 )
 list(
   # INPUT DATA ####
@@ -46,11 +48,22 @@ list(
   # SIMULATIONS ####
   tar_target(repeats, 100), # 1000 in publication, shorter for quick demonstration
   tar_target(input_simulation_2007,
-             Bootstrap_params(start_date = "2007-05-01", end_date = "2007-10-01", Preterms_per_day_all,
-                                      number_of_repeats = repeats, LaGuardiaTemp1, target_seed = 1) %>%
-    tar_group(),
-    iteration = 'group'),
-  tar_target(CCO_simulation_2007, Case_Crossovers(input_simulation_2007),
+             Bootstrap_params(start_date = "2007-05-01", end_date = "2007-10-01", 
+                              Preterms_per_day_all, number_of_repeats = repeats, 
+                              LaGuardiaTemp1, target_seed = 1, batch_size = 10) %>%
+               tar_group(),
+             iteration = 'group'),
+  # tar_target(batched_input_2007, input_simulation_2007 %>% 
+  #              mutate(batch = findInterval(tar_group, seq(1, max(tar_group), batch_length))) %>%
+  #              group_by(batch) %>%
+  #              tar_group(),
+  #            iteration = 'group'),
+  # tar_target(CCO_simulation_2007, data.table::rbindlist(lapply(
+  #              batched_input_2007 %>% split(.$Splits), FUN = Case_Crossovers)), # equivalent to purrr::map_dfr? 
+  #            pattern = map(batched_input_2007)),
+  tar_target(CCO_simulation_2007, 
+             purrr::map_dfr(input_simulation_2007 %>% split(.$Splits), 
+                            ~Case_Crossovers(.x)), 
              pattern = map(input_simulation_2007)),
   
   tar_target(input_simulation_2018,
