@@ -1,0 +1,84 @@
+---
+title: "Simulation Report"
+author: "Daniel Carrión, Johnathan Rush"
+date: "9/14/2021"
+output: 
+  github_document:
+    toc: true
+    toc_depth: 1
+    dev: jpeg
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+options(tidyverse.quiet = TRUE)
+```
+
+## Repeats
+
+```{r}
+cat(tar_read(repeats))
+```
+
+# Laguardia Temperature
+
+```{r laguardia_temp_plot}
+tar_read(laguardia_temp_plot)
+```
+
+# Bias Tables
+
+## 2007
+
+```{r table_bias_2007}
+tar_read(table_bias_2007)
+```
+
+## 2018
+
+```{r table_bias_2018}
+tar_read(table_bias_2018)
+```
+
+# Coverage Tables
+
+## 2007
+
+```{r table_coverage_2007}
+tar_read(table_coverage_2007)
+```
+
+## 2018
+
+```{r table_coverage_2018}
+tar_read(table_coverage_2018)
+```
+
+# Visualizations
+
+## 2007
+
+```{r vis_2007, fig.width=9.8, fig.height=7}
+tar_read(vis_2007)
+```
+
+## 2018
+
+```{r vis_2018, fig.width=9.8, fig.height=7}
+tar_read(vis_2018)
+```
+
+# Births and Temperature
+
+## 2007
+
+```{r vis_birth_temp_2007}
+tar_read(vis_birth_temp_2007)
+```
+
+## 2018
+
+```{r vis_birth_temp_2018}
+tar_read(vis_birth_temp_2018)
+```
+
