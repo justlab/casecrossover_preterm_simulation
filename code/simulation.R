@@ -446,32 +446,6 @@ Case_Crossovers <- function(Params_for_Simulated_Year){
   return(RegressionResults)
 }
 
-Simulate_and_analyze_CCO <- function(start_date, end_date, Preterms_per_day_df, number_of_repeats, Temp_df, target_seed){
-  set.seed(target_seed)
-  #plan(multisession)
-  Parameters <- Create_Parameters_for(start_date, end_date, Preterms_per_day_df, Temp_df)
-
-  Bootstrapped_counts <- number_of_repeats %>%
-    rerun(Random_draws(Parameters)) %>%
-    tibble() %>%
-    unnest(cols = c(.)) %>%
-    dplyr::select(date, Simulated_RR, Gest_Age, x, Random_draw) %>%
-    group_by(Simulated_RR, date, Gest_Age) %>%
-    mutate(Round_of_Sim = row_number(),
-           Splits = paste(Simulated_RR, Round_of_Sim, sep = ".")) %>% #creating one variable on which to split for parallelization
-    ungroup()
-  
-  message("Bootstrapped")
-  split_counts <- Bootstrapped_counts %>% split(.$Splits)
-  
-  message("Split, starting future_map_dfr...")
-  Results_CaseCrossovers <- split_counts %>%
-    future_map_dfr(., ~Case_Crossovers(.x), .progress = T, .options = furrr_options(seed = target_seed))
-
-  return(Results_CaseCrossovers)
-
-}
-
 # Prepare table for CCO, group by splits for later parallel computation of CCO in targets
 Bootstrap_params <- function(start_date, end_date, Preterms_per_day_df, 
                              number_of_repeats, Temp_df, target_seed,
