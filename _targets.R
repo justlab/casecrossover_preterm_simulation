@@ -13,11 +13,9 @@ tar_option_set(
     "survival",
     "broom",
     "zoo",
-    "splines",
-    "furrr",
+    "purrr",
     "scales",
-    "ggpubr",
-    "future"
+    "ggpubr"
   ),
   format = 'qs', 
   workspace_on_error = TRUE

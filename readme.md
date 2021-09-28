@@ -11,17 +11,18 @@ Make sure you have R version 4.x installed, then download or clone this reposito
 To run the simulations, you'll need recent versions of the following R packages installed:  
 
     "targets",
+    "tarchetypes",
     "tidyverse",
     "here",
     "lubridate",
     "survival",
     "broom",
     "zoo",
-    "splines",
-    "furrr",
+    "purrr",
     "scales",
     "ggpubr",
-    "future"
+    "future",
+    "future.callr" # or use an alternative future backend, like multisession
   
     
 ## Number of Simulated Datasets    
