@@ -43,7 +43,7 @@ list(
                                          Annual_Singleton_Births_file)),
 
   # SIMULATIONS ####
-  tar_target(repeats, 1000), # 1000 in publication, shorter for quick demonstration
+  tar_target(repeats, 10), # 1000 in publication, shorter for quick demonstration
   tar_target(batch_size, max(as.integer(repeats/10), 1)),
   tar_target(input_simulation_2007,
              Bootstrap_params(start_date = "2007-05-01", end_date = "2007-10-01", 
