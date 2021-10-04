@@ -151,15 +151,6 @@ FourWk_aka28day_stratification <- function(Hazard_Periods){ #time stratified app
     return(Control_periods)
   }
 
-  
-getSeason <- function(input.date){
-  numeric.date <- 100*month(input.date)+day(input.date)
-  ## input Seasons upper limits in the form MMDD in the "break =" option:
-  cuts <- base::cut(numeric.date, breaks = c(0,319,0620,0921,1220,1231))
-  # rename the resulting groups (could've been done within cut(...levels=) if "Winter" wasn't double
-  levels(cuts) <- c("Winter","Spring","Summer","Fall","Winter")
-  return(cuts)
-}
 
 #### Cleaning Temperature Data ####
 
@@ -577,34 +568,6 @@ Visualize_Results <- function(results_df, number_of_repeats){
 }
 
 
-#calculate a signed percent bias of estimated from simulated
-Visualize_Percent_Bias <- function(results_df){ 
-  
-  Results_CaseCrossovers1 <- results_df %>%
-    filter(Simulated_RR != 1 & (Analysis=="CCO_2week" | Analysis=="CCO_Month")) %>%
-    group_by(Analysis, Simulated_RR) %>%
-    mutate(Round_of_Sim = row_number(),
-           Analysis = factor(Analysis, levels = c("CCO_2week", "CCO_Month"), 
-                             labels = c("Time stratified: 2 weeks", "Time Stratified: Month"))) %>%
-    ungroup()
-  
-  Bias_Estimates <- Results_CaseCrossovers1 %>%
-    mutate(Bias_per_10F = (estimate - log(Simulated_RR)/10)/(log(Simulated_RR)/10))
-  
-  Bias_plot <- ggplot(Bias_Estimates) + 
-    geom_boxplot(aes(Simulated_RR, Bias_per_10F, fill = Analysis), width = .5) + 
-    facet_grid(~Simulated_RR, scales = "free", switch = "x") +
-    ylab("Bias") + 
-    theme_minimal(base_size = 22) +
-    scale_x_continuous(breaks = NULL) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1, scale = 100)) + 
-    theme(legend.position = "bottom",
-          axis.title.x = element_blank(),
-          legend.title = element_blank())
-  
-  return(Bias_plot)
-}
-
 #look at the temperature and birth data - basis for all simulations
 Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){ 
   
@@ -637,53 +600,4 @@ Visualize_Births_and_Temp <- function(Temp_df, Births_df, start_date, end_date){
   
   return(combined_plot)
 }
-
-NotSo_Month_stratification <- function(Hazard_Periods){
-    
-    Control_Periods <- Hazard_Periods %>%
-      mutate(Month = month(date),
-             FirstDay = floor_date(date, unit = "months"),
-             Weeks = as.integer(ceiling(difftime(date, FirstDay, units = "weeks"))),
-             Ctrldate1 = if_else(Weeks<=1, date+days(7),
-                                 if_else(Weeks==2, date-days(7),
-                                         if_else(Weeks==3, date-days(14), date-days(21)))),
-             Ctrldate2 = if_else(Weeks<=1, date+days(14),
-                                 if_else(Weeks==2, date+days(7),
-                                         if_else(Weeks==3, date-days(7), date-days(14)))),
-             Ctrldate3 = if_else(Weeks<=1, date+days(21),
-                                 if_else(Weeks==2, date+days(14),
-                                         if_else(Weeks==3, date+days(7), date-days(7))))) %>%
-      ungroup()
-    
-    Gest_Ages <- Control_Periods %>%
-      mutate(GestAge_Ctrldate1 = as.numeric(difftime(Ctrldate1, date, units = "weeks")+ Gest_Age),
-             GestAge_Ctrldate2 = as.numeric(difftime(Ctrldate2, date, units = "weeks")+ Gest_Age),
-             GestAge_Ctrldate3 = as.numeric(difftime(Ctrldate3, date, units = "weeks")+ Gest_Age)) 
-    
-    Gest_Ages1 <- Gest_Ages %>%
-      dplyr::select(Participant, Ctrldate1, GestAge_Ctrldate1) %>%
-      rename(date = "Ctrldate1",
-             Gest_Age = GestAge_Ctrldate1)
-    
-    Gest_Ages2 <- Gest_Ages %>%
-      dplyr::select(Participant, Ctrldate2, GestAge_Ctrldate2) %>%
-      rename(date = "Ctrldate2",
-             Gest_Age = "GestAge_Ctrldate2")
-    
-    Gest_Ages3 <- Gest_Ages %>%
-      dplyr::select(Participant, Ctrldate3, GestAge_Ctrldate3) %>%
-      rename(date = "Ctrldate3",
-             Gest_Age = "GestAge_Ctrldate3") %>%
-      bind_rows(., Gest_Ages1, Gest_Ages2)
-    
-    Control_Periods1 <- Control_Periods %>%
-      dplyr::select(Participant, Ctrldate1, Ctrldate2, Ctrldate3) %>%
-      group_by(Participant) %>%
-      gather("Control_day", "date", Ctrldate1:Ctrldate3) %>% 
-      mutate(Case = 0) %>%
-      dplyr::select(-Control_day) %>%
-      left_join(., Gest_Ages3, by = c("Participant", "date"))
-    
-    return(Control_Periods1)
-  }
 
