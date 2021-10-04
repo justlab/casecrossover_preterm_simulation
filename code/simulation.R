@@ -177,7 +177,7 @@ plot_temp <- function(LaGuardiaTemp1){
 
 Clean_and_smooth_data <- function(NYBirths_by_Month_plural_file, NYBirths_by_Weekday_file){
   #pulling out annual pattern of proportion births per month
-  NYBirths_by_Month_plural <- read_tsv(NYBirths_by_Month_plural_file, col_types = cols())
+  NYBirths_by_Month_plural <- suppressMessages(read_tsv(NYBirths_by_Month_plural_file, col_types = cols()))
   NYBirths_by_Month1 <- NYBirths_by_Month_plural %>%
     filter(!is.na(Month),
            `Plurality or Multiple Birth`=="Single") %>%
@@ -213,7 +213,7 @@ Clean_and_smooth_data <- function(NYBirths_by_Month_plural_file, NYBirths_by_Wee
     dplyr::select(date, Year, Wk_of_Year, Month_number, Week_Births1, Week_Births_Pct)
 
   #1) Births by day of week
-  NYBirths_by_Weekday <- read_tsv(NYBirths_by_Weekday_file, col_types = cols())
+  NYBirths_by_Weekday <- suppressMessages(read_tsv(NYBirths_by_Weekday_file, col_types = cols()))
   NYBirths_by_Weekday1 <- NYBirths_by_Weekday %>%
     filter(`Plurality or Multiple Birth`=="Single") %>%
     rename("Month_number" = `Month Code`) %>%
@@ -243,13 +243,13 @@ Clean_and_smooth_data <- function(NYBirths_by_Month_plural_file, NYBirths_by_Wee
 Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_single_file, Births_WklyGestAge_07to18_file, Annual_Singleton_Births_file){
 
   #now look at singletons by gestational age to get proportion of births
-  Annual_Singleton_Births <- read_tsv(Annual_Singleton_Births_file, col_types = cols())
+  Annual_Singleton_Births <- suppressMessages(read_tsv(Annual_Singleton_Births_file, col_types = cols()))
   Annual_Singleton_Births1 <- Annual_Singleton_Births %>%
     filter(is.na(Notes)) %>%
     rename(Total_Singleton_Births_Year = "Births") %>%
     select(Year, Total_Singleton_Births_Year)
 
-  NYBirths_by_Month_single <- read_tsv(NYBirths_by_Month_single_file, col_types = cols())
+  NYBirths_by_Month_single <- suppressMessages(read_tsv(NYBirths_by_Month_single_file, col_types = cols()))
   MonthBirths_total <- NYBirths_by_Month_single %>%
     filter(Notes == "Total" & !is.na(`Month Code`)) %>%
     rename("Month_number" = `Month Code`) %>%
@@ -257,7 +257,7 @@ Estimate_all_daily_preterms <- function(NYBirths_by_Day, NYBirths_by_Month_singl
     select(Year, Month_number, Births_month)
 
   ## All births by gestational age
-  Births_WklyGestAge_07to18 <- read_tsv(Births_WklyGestAge_07to18_file, col_types = cols())
+  Births_WklyGestAge_07to18 <- suppressMessages(read_tsv(Births_WklyGestAge_07to18_file, col_types = cols()))
   Births_WklyGestAge_07to18_a <- Births_WklyGestAge_07to18 %>%
     filter(is.na(Notes) & "LMP Gestational Age Weekly Code" != 99) %>%
     rename(Gest_Age = "LMP Gestational Age Weekly Code",
