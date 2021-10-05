@@ -30,19 +30,6 @@ To run the simulations, you'll need recent versions of the following R packages 
 The publication based on this project used 1000 simulated datasets per simulated relative risk. This is controlled by the value of `repeats` in `_targets.R`.  
 We have set this to 10 so that users can run a quick simulation by default, but you may change this back to 1000 or any number. However, memory (RAM) usage scales with the values of `repeats`. 
 
-## Memory and CPU Usage
-
-Megabytes of RAM used *per core* is approximately `463 + 5.6 * repeats`.  
-For 10 `repeats`, this is around 500 MB per core, or around 6000 MB per core for 1000 repeats. 
-
-To set the number of cores to use in parallel processing, set the value for `mc.cores` in `_targets.R`. 
-
-The simulation will run more quickly with additional cores, but each core will need the same amount of memory, so avoid using so many cores that your system runs out of memory. You should also reserve one additional core that acts as the supervisor, and it uses approximately the same amount of memory as the worker cores. 
-
-This means to run the default settings of 3 cores and 10 `repeats`, you would need approximately  
-`(3+1) * (463 + 5.6 * 10) = 2076` megabytes of RAM free.  
-To run with 8 cores and 1000 `repeats`, you would need around 55 GB of RAM free.
-    
 ## Running the Simulation    
     
 To run the simulation, start an R or RStudio session in the directory where you've downloaded this repository. In the R console, run:
@@ -52,14 +39,36 @@ To run the simulation, start an R or RStudio session in the directory where you'
     
 And it will begin the workflow provided in the `_targets.R` file. You can cancel the run at any time, and any completed targets will be skipped the next time you run `tar_make()`. 
 
+When the workflow is finished, it will render a summary report to `code/report.html` that you can open in your web browser.  
+
+Alternatively, you can run the workflow much faster by running multiple workers at once. Instead of `tar_make()`, run:     
+    
+    tar_make_future(workers = 4L)
+    
+replacing the number 4 with however many simultaneous workers you would like to run, up to the number of CPU cores on your system. You must also have enough system RAM to support all of the workers running at once.  
+
+## Memory Usage
+
+Megabytes of RAM used *per worker* increases with `repeats`. Systems with 8 GB of RAM will likely be able to run the workflow with the default setting of 10 `repeats`.  
+
+Use these *rough* estimates of memory usage per worker to decide how many simultaneous workers your system can support based on your selection for `repeats`:  
+
+| repeats | estimated RAM per worker |
+| 10 | 300 MB | 
+| 40 | 800 MB | 
+| 100 | 2500 MB | 
+| 1000 | 3600 MB | 
+
 ## Displaying Results
 
-The last section of the `_targets.R` file lists output tables and figures you may want to view after you have completed running the simulation. Each of these are called a "target," and you can display them with the `tar_read` function, or load them into your R environment with `tar_load`. 
+The last section of the `_targets.R` file lists output tables and figures you may want to view after you have completed running the simulation. Each of these are called a "target," and you can display them with the `tar_read` function, or load them into your R environment with `tar_load`.  
 
-For example:
+For example:  
 `tar_load(table_coverage_2018)` will load `table_coverage_2018` into your environment.  
-`tar_read(vis_2018)` will display the coverage and bias plots for the 2018 simulations. 
+`tar_read(vis_2018)` will display the coverage and bias plots for the 2018 simulations.  
 
 ## Reproducibility
 
-The workflow has been made reproducible using the [targets package](https://github.com/ropensci/targets) by Will Landau and contributors. Random seeds are set, so you should receive the same results if you run this workflow multiple times while providing the same parameters. 
+The workflow has been made reproducible using the [targets package](https://github.com/ropensci/targets) by Will Landau and contributors. Random seeds are set, so you should receive the same results if you run this workflow multiple times while providing the same parameters.  
+
+The Targets package gives many ways to examine your run of the workflow. For a useful flowchart showing status and execution time, try: `tar_visnetwork(targets_only = TRUE, label = 'time')`.
