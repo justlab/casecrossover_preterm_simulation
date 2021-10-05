@@ -68,6 +68,8 @@ For example:
 `tar_load(table_coverage_2018)` will load `table_coverage_2018` into your environment.  
 `tar_read(vis_2018)` will display the coverage and bias plots for the 2018 simulations.  
 
+These tables and plots have also been pulled into the `code/report.html` generated at the end of the workflow.  
+
 ## Reproducibility
 
 The workflow has been made reproducible using the [targets package](https://github.com/ropensci/targets) by Will Landau and contributors. Random seeds are set, so you should receive the same results if you run this workflow multiple times while providing the same parameters.  
