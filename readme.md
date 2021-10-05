@@ -54,6 +54,7 @@ Megabytes of RAM used *per worker* increases with `repeats`. Systems with 8 GB o
 Use these *rough* estimates of memory usage per worker to decide how many simultaneous workers your system can support based on your selection for `repeats`:  
 
 | repeats | estimated RAM per worker |
+| --- | --- |
 | 10 | 300 MB | 
 | 40 | 800 MB | 
 | 100 | 2500 MB | 
