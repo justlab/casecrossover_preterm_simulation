@@ -10,7 +10,7 @@ Make sure you have R version 4.x installed, then download or clone this reposito
 
 To run the simulations, you'll need recent versions of the following R packages installed:  
 
-    "targets",
+    packages <- c("targets",
     "tarchetypes",
     "tidyverse",
     "here",
@@ -22,13 +22,14 @@ To run the simulations, you'll need recent versions of the following R packages 
     "scales",
     "ggpubr",
     "future",
-    "future.callr" # or use an alternative future backend, like multisession
-  
+    "future.callr") # or use an alternative future backend, like multisession
+    
+    install.packages(setdiff(packages, rownames(installed.packages()))) 
     
 ## Number of Simulated Datasets    
     
 The publication based on this project used 1000 simulated datasets per simulated relative risk. This is controlled by the value of `repeats` in `_targets.R`.  
-We have set this to 10 so that users can run a quick simulation by default, but you may change this back to 1000 or any number. However, memory (RAM) usage scales with the values of `repeats`. 
+We have set this to 10 so that users can run a quick simulation by default, but you may change this back to 1000 or any number. However, memory (RAM) usage scales with the values of `repeats` (see below). 
 
 ## Running the Simulation    
     
