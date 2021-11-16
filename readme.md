@@ -21,6 +21,7 @@ To run the simulations, you'll need recent versions of the following R packages 
     "purrr",
     "scales",
     "ggpubr",
+    "qs",
     "future",
     "future.callr") # or use an alternative future backend, like multisession
     
