@@ -8,24 +8,8 @@ This simulation workflow accompanies "[Evaluating the suitability of the case-cr
 
 Make sure you have R version 4.x installed, then download or clone this repository to a directory on your computer. 
 
-To run the simulations, you'll need recent versions of the following R packages installed:  
-
-    packages <- c("targets",
-    "tarchetypes",
-    "tidyverse",
-    "here",
-    "lubridate",
-    "survival",
-    "broom",
-    "zoo",
-    "purrr",
-    "scales",
-    "ggpubr",
-    "qs",
-    "future",
-    "future.callr") # or use an alternative future backend, like multisession
-    
-    install.packages(setdiff(packages, rownames(installed.packages()))) 
+R package dependencies are managed by `renv`. If you don't have the `renv` package installed, it will be automatically installed when you open the RStudio project or an R session in this project directory.  
+Run `renv::restore()`, and it will install the same package versions to your project directory that we used. This will not impact the versions of R packages you use outside of this project. 
     
 ## Number of Simulated Datasets    
     
