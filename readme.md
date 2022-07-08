@@ -1,6 +1,6 @@
 ## About
 
-This simulation workflow accompanies "[Evaluating the suitability of the case-crossover design under changing baseline outcome risk: A simulation of ambient temperature and preterm birth](https://doi.org/10.1101/2021.02.17.21251948)" by Carrión et. al, 2021.
+This repository holds the simulation and analysis code for the research project "The Case–Crossover Design Under Changing Baseline Outcome Risk: A Simulation of Ambient Temperature and Preterm Birth," published in Epidemiology: https://doi.org/10.1097/ede.0000000000001477 by Carrión et. al, 2022. 
 
 ...
 
